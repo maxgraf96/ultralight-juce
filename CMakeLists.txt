@@ -1,12 +1,20 @@
 cmake_minimum_required(VERSION 3.12)
 project(UltralightJUCE VERSION 1)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 14)
 
 # Add JUCE as a subdirectory
 add_subdirectory(JUCE)
 
 add_subdirectory(Libs/ultralight-sdk)
+
+include(FetchContent)
+FetchContent_Declare(
+        readerwriterqueue
+        GIT_REPOSITORY    https://github.com/cameron314/readerwriterqueue
+        GIT_TAG           master
+)
+FetchContent_MakeAvailable(readerwriterqueue)
 
 # Add your project's source files
 set(SOURCES
@@ -40,12 +48,14 @@ juce_generate_juce_header(${PROJECT_NAME})
 target_include_directories(${PROJECT_NAME}
         PUBLIC
         Libs/ultralight-sdk/include
+        Source
         )
 
 target_sources(${PROJECT_NAME} PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/GUIMainComponent.cpp
+#        Source/FileWatch.hpp
         )
 
 target_compile_definitions(${PROJECT_NAME}
@@ -54,7 +64,9 @@ target_compile_definitions(${PROJECT_NAME}
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_DISPLAY_SPLASH_SCREEN=0
+        DONT_SET_USING_JUCE_NAMESPACE=1
         )
+
 
 # Set the paths where CMake should search for libraries
 set(CMAKE_LIBRARY_PATH "${CMAKE_LIBRARY_PATH};Libs/ultralight-sdk/bin")
@@ -94,4 +106,5 @@ target_link_libraries(${PROJECT_NAME}
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
+        readerwriterqueue
         )

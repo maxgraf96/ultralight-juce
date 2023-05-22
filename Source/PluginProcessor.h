@@ -5,7 +5,7 @@
 
 //#include "SCEditor.h"
 
-using namespace juce;
+//using namespace juce;
 
 //==============================================================================
 class AudioPluginAudioProcessor  : public juce::AudioProcessor, public juce::ChangeBroadcaster

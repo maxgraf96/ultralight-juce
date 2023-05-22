@@ -21,8 +21,8 @@ AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
 
 void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    if (! Process::isForegroundProcess())
-        Process::makeForegroundProcess();
+    if (! juce::Process::isForegroundProcess())
+        juce::Process::makeForegroundProcess();
 
     DBG(sampleRate);
     DBG(samplesPerBlock);
@@ -159,9 +159,9 @@ juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
     // Check if standalone app
     if (auto* app = dynamic_cast<juce::JUCEApplicationBase*> (juce::JUCEApplication::getInstance()))
         if (app->isStandaloneApp()){
-            if(TopLevelWindow::getNumTopLevelWindows() > 1)
+            if(juce::TopLevelWindow::getNumTopLevelWindows() > 1)
             {
-                TopLevelWindow* w = TopLevelWindow::getTopLevelWindow(0);
+                juce::TopLevelWindow* w = juce::TopLevelWindow::getTopLevelWindow(0);
                 w->setUsingNativeTitleBar(true);
             }
         }

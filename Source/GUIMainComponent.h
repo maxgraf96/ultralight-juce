@@ -5,25 +5,28 @@
 #ifndef ULTRALIGHTJUCE_GUIMAINCOMPONENT_H
 #define ULTRALIGHTJUCE_GUIMAINCOMPONENT_H
 
+#include <memory>
+#include <string>
+
 #include <JuceHeader.h>
 #include <juce_opengl/juce_opengl.h>
 #include <Ultralight/Ultralight.h>
 #include <AppCore/Platform.h>
+#include <readerwriterqueue.h>
+
+#include "FileWatcher.hpp"
+#include "Ultralight/RefPtr.h"
 
 using namespace ultralight;
-using namespace juce::gl;
 
 static int WIDTH = 1024;
 static int HEIGHT = 700;
 
-class GUIMainComponent : public juce::Component{
+class GUIMainComponent : public juce::Component {
 public:
-    GUIMainComponent()
-    {
-        setSize (WIDTH, HEIGHT);
-        // ... other initialization code ...
-//        openGLContext.attachTo (*this);
 
+    GUIMainComponent() {
+        setSize(WIDTH, HEIGHT);
         // ================================== ULTRALIGHT ==================================
         Config config;
 
@@ -47,7 +50,7 @@ public:
 
         /// Use the OS's native file loader, with a base directory of "."
         /// All file:/// URLs will load relative to this base directory.
-        Platform::instance().set_file_system(GetPlatformFileSystem("."));
+        Platform::instance().set_file_system(GetPlatformFileSystem("/Users/max/CLionProjects/ultralight-juce/Resources"));
 
         /// Use the default logger (writes to a log file)
         Platform::instance().set_logger(GetDefaultLogger("ultralight.log"));
@@ -59,23 +62,38 @@ public:
         renderer = Renderer::Create();
 
         /// Create an HTML view, 500 by 500 pixels large.
-        view = renderer->CreateView(WIDTH, HEIGHT, false, nullptr);
+        view = renderer->CreateView(WIDTH, HEIGHT, true, nullptr);
 
         /// Load a raw string of HTML.
         // Load text from html file
-        File htmlFile = File("/Users/max/CLionProjects/ultralight-juce/Resources/index.html");
+        juce::String filePath = "/Users/max/CLionProjects/ultralight-juce/Resources/index.html";
+        juce::File htmlFile = juce::File(filePath);
         juce::String htmlText = htmlFile.loadFileAsString();
-        view->LoadHTML(htmlText.toStdString().c_str());
+//        view->LoadHTML(htmlText.toStdString().c_str());
+        view->LoadURL("file:///index.html");
 
         /// Notify the View it has input focus (updates appearance).
         view->Focus();
 
-        setOpaque(false);
+        fileWatcher = std::make_unique<FileWatcher>("/Users/max/CLionProjects/ultralight-juce/Resources");
+
+        fileWatcher->AddCallback("index.html", [this](const std::string& filename) {
+            DBG("File changed: " << filename);
+            queue.enqueue(filename);
+        });
+
+        fileWatcher->Start();
     }
 
     void paint (juce::Graphics& g) override
     {
         g.fillAll(juce::Colours::green);
+
+        std::string out;
+        while(queue.try_dequeue(out)){
+            view->Reload();
+        }
+
         /// Render all active Views (this updates the Surface for each View).
         renderer->Update();
         renderer->Render();
@@ -87,7 +105,7 @@ public:
         ///
         /// Check if our Surface is dirty (pixels have changed).
         ///
-//        if (!surface->dirty_bounds().IsEmpty()){
+        if (!surface->dirty_bounds().IsEmpty()){
             /// Get the pixel-buffer Surface for a View.
             RefPtr<Bitmap> bitmap = surface->bitmap();
             /// Lock the Bitmap to retrieve the raw pixels.
@@ -103,7 +121,7 @@ public:
 
             /// Clear the dirty bounds.
             surface->ClearDirtyBounds();
-//        }
+        }
 
         g.drawImage(image, 0, 0, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT);
     }
@@ -130,13 +148,13 @@ public:
         outputFile.deleteFile();
 
         // Create a FileOutputStream for the output file
-        FileOutputStream outputStream(outputFile);
+        juce::FileOutputStream outputStream(outputFile);
 
         // Check if the FileOutputStream was successfully created
         if (outputStream.openedOk())
         {
             // Export the image to PNG
-            PNGImageFormat pngFormat;
+            juce::PNGImageFormat pngFormat;
             pngFormat.writeImageToStream(image, outputStream);
 
             // Close the output stream
@@ -157,8 +175,12 @@ public:
 
     RefPtr<Renderer> renderer;
     RefPtr<View> view;
+    std::unique_ptr<FileWatcher> fileWatcher;
+    bool shouldViewReload = false;
 
     juce::Image image;
+
+    moodycamel::ReaderWriterQueue<std::string> queue;
 
 };
 
