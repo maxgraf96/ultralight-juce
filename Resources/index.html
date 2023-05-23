@@ -7,8 +7,6 @@
 
         * {
             font-family: Helvetica;
-            /*background: #00000000;*/
-            /*background-color: transparent !important;*/
         }
 
         body {
@@ -18,16 +16,48 @@
             background-color: transparent !important;
             /*test = 2*/
         }
+    /*    Body background black when hovering */
+    /*    body:hover {*/
+            /*background-color: blue !important;*/
+        /*}*/
+
+        h1:hover {
+            color: red !important;
+        }
+
+        .box {
+            width: 200px;
+            height: 200px;
+            background-color: red;
+            transition: all 1s;
+        }
+        .box:hover {
+            width: 200px;
+            height: 200px;
+            background-color: blue;
+            animation: blurAnimation 2s infinite alternate;
+        }
+
+        @keyframes blurAnimation {
+            0% {
+                filter: blur(0);
+            }
+            100% {
+                filter: blur(10px);
+            }
+        }
 
     </style>
 </head>
 <body>
     <h1>Hello World!</h1>
-    <p>This is a test of Ultralight.</p>
     <select>
         <option>Test</option>
         <option>Test</option>
     </select>
-<p>Hiid</p>
+<div class="box">
+    <h2>Hello</h2>
+    <p>again</p>
+</div>
 </body>
 </html>
