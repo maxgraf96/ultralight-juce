@@ -13,33 +13,6 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
 {
     // Add parameters to the AudioProcessorValueTreeState
     parameters.state = juce::ValueTree(juce::Identifier("MyAudioProcessor"));
-
-    // ================================== ULTRALIGHT ==================================
-    Config config;
-
-    // We need to tell config where our resources are so it can load our bundled SSL certificates to make HTTPS requests.
-    config.resource_path = "/Users/max/CLionProjects/ultralight-juce/Libs/ultralight-sdk/bin/resources";
-    // The GPU renderer should be disabled to render Views to a pixel-buffer (Surface).
-    config.use_gpu_renderer = false;
-    // You can set a custom DPI scale here. Default is 1.0 (100%)
-    auto scale = juce::Desktop::getInstance().getDisplays().displays[0].scale;
-    config.device_scale = scale;
-
-    // Pass our configuration to the Platform singleton so that the library can use it.
-    Platform::instance().set_config(config);
-    // Use the OS's native font loader
-    Platform::instance().set_font_loader(GetPlatformFontLoader());
-    // Use the OS's native file loader, with a base directory
-    // All file:// URLs will load relative to this base directory.
-    // For shipping, this needs to be tied to JUCE Binary files or a custom resource directory
-    Platform::instance().set_file_system(GetPlatformFileSystem("/Users/max/CLionProjects/ultralight-juce/Resources"));
-    // Use the default logger (writes to a log file)
-    Platform::instance().set_logger(GetDefaultLogger("ultralight.log"));
-
-    // Create our Renderer (call this only once per application).
-    // The Renderer singleton maintains the lifetime of the library
-    // and is required before creating any Views.
-//    renderer = Renderer::Create();
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
@@ -220,13 +193,42 @@ void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeI
 
 //==============================================================================
 
-// This creates new instances of the plugin..
-
+// HYPERIMPORTANT: Since Ultralight has a hard constraint on the thread that first creates and then calls the
+// renderer, we store it globally (this is shared between all instances of the plugin)
+// The docs say to have one renderer per application
+// In DAW-land, application == DAW, application != plugin -> we have one renderer per DAW!!!!!!!
+// It follows that we have to use this particular instance and NEVER create a new one
+// Doing so will invalidate the first one and cause a crash
 ultralight::RefPtr<ultralight::Renderer> AudioPluginAudioProcessor::RENDERER = nullptr;
 
+// This creates new instances of the plugin
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
+    // ================================== ULTRALIGHT ==================================
+    Config config;
+
+    // We need to tell config where our resources are so it can load our bundled SSL certificates to make HTTPS requests.
+    config.resource_path = "/Users/max/CLionProjects/ultralight-juce/Libs/ultralight-sdk/bin/resources";
+    // The GPU renderer should be disabled to render Views to a pixel-buffer (Surface).
+    config.use_gpu_renderer = false;
+    // You can set a custom DPI scale here. Default is 1.0 (100%)
+    auto scale = juce::Desktop::getInstance().getDisplays().displays[0].scale;
+    config.device_scale = scale;
+
+    // Pass our configuration to the Platform singleton so that the library can use it.
+    Platform::instance().set_config(config);
+    // Use the OS's native font loader
+    Platform::instance().set_font_loader(GetPlatformFontLoader());
+    // Use the OS's native file loader, with a base directory
+    // All file:// URLs will load relative to this base directory.
+    // For shipping, this needs to be tied to JUCE Binary files or a custom resource directory
+    Platform::instance().set_file_system(GetPlatformFileSystem("/Users/max/CLionProjects/ultralight-juce/Resources"));
+    // Use the default logger (writes to a log file)
+    Platform::instance().set_logger(GetDefaultLogger("ultralight.log"));
+
+    // This makes sure we only have ONE renderer per application
     if(AudioPluginAudioProcessor::RENDERER.get() == nullptr)
         AudioPluginAudioProcessor::RENDERER = Renderer::Create();
+
     return new AudioPluginAudioProcessor();
 }
