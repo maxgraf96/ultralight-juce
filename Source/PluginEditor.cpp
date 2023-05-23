@@ -10,6 +10,8 @@ PluginAudioProcessorEditor::PluginAudioProcessorEditor(juce::AudioProcessor& pro
     // Add the GUI main component
     guiMainComponent = std::make_unique<GUIMainComponent>();
     addAndMakeVisible(guiMainComponent.get());
+
+    setResizable(true, true);
 }
 
 PluginAudioProcessorEditor::~PluginAudioProcessorEditor()
@@ -24,5 +26,6 @@ void PluginAudioProcessorEditor::paint(juce::Graphics& g)
 
 void PluginAudioProcessorEditor::resized()
 {
-    // Arrange and resize your GUI components here
+    if(guiMainComponent.get())
+        guiMainComponent->resized();
 }

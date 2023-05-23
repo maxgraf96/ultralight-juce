@@ -159,11 +159,11 @@ juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
     // Check if standalone app
     if (auto* app = dynamic_cast<juce::JUCEApplicationBase*> (juce::JUCEApplication::getInstance()))
         if (app->isStandaloneApp()){
-            if(juce::TopLevelWindow::getNumTopLevelWindows() > 1)
-            {
-                juce::TopLevelWindow* w = juce::TopLevelWindow::getTopLevelWindow(0);
-                w->setUsingNativeTitleBar(true);
-            }
+//            if(juce::TopLevelWindow::getNumTopLevelWindows() > 1)
+//            {
+            juce::TopLevelWindow* w = juce::TopLevelWindow::getTopLevelWindow(0);
+            w->setUsingNativeTitleBar(true);
+//            }
         }
     return editor;
 }
