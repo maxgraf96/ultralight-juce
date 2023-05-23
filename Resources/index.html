@@ -6,36 +6,26 @@
     <style type="text/css">
 
         * {
-            font-family: Helvetica;
+            font-family: Helvetica, sans-serif;
+            color: #ffffff;
         }
 
         body {
-            background: #00000000;
             margin: 0;
-            padding: 12px;
             background-color: transparent !important;
-            /*test = 2*/
-        }
-    /*    Body background black when hovering */
-    /*    body:hover {*/
-            /*background-color: blue !important;*/
-        /*}*/
-
-        h1:hover {
-            color: red !important;
         }
 
         .box {
             width: 200px;
             height: 200px;
-            background-color: red;
-            transition: all 1s;
+            background-color: darkblue;
+            transition: all 0.33s;
         }
         .box:hover {
             width: 200px;
             height: 200px;
             background-color: blue;
-            animation: blurAnimation 2s infinite alternate;
+            /*animation: blurAnimation 0.33s infinite alternate;*/
         }
 
         @keyframes blurAnimation {
@@ -43,21 +33,45 @@
                 filter: blur(0);
             }
             100% {
-                filter: blur(10px);
+                filter: blur(300px);
             }
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #00000000;
+            width: 100%;
+            height: 10vh;
+        }
+
+        .header > div {
+            background-color: #00000000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            width: 100px;
+        }
+
+        .header > div:hover {
+            background-color: #4D1414CB;
         }
 
     </style>
 </head>
 <body>
-    <h1>Hello World!</h1>
-    <select>
-        <option>Test</option>
-        <option>Test</option>
-    </select>
-<div class="box">
-    <h2>Hello</h2>
-    <p>again</p>
+<div class="header">
+    <div>left</div>
+    <div>center</div>
+    <div>right</div>
+</div>
+<div style="display: flex; width: 100%; align-items: center; justify-content: center;">
+    <div class="box">
+        <h2>Hello</h2>
+        <p>again</p>
+    </div>
 </div>
 </body>
 </html>

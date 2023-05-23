@@ -69,8 +69,8 @@ public:
         // You should set up the Platform handlers before this.
         renderer = Renderer::Create();
 
-        // Create an HTML view, 500 by 500 pixels large.
-        view = renderer->CreateView(WIDTH, HEIGHT, true, nullptr);
+        // Create an HTML view that is WIDTH x HEIGHT
+        view = renderer->CreateView(WIDTH * JUCE_SCALE, HEIGHT * JUCE_SCALE, true, nullptr);
 
         // Load a raw string of HTML.
         // Load text from html file
@@ -97,7 +97,7 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        g.fillAll(juce::Colours::green);
+        g.fillAll(juce::Colours::black);
 
         std::string out;
         while(queue.try_dequeue(out)){
@@ -166,8 +166,8 @@ public:
     void resized() override
     {
         // Resize the View to the new size of the window.
-        if(view)
-            view->Resize(static_cast<uint32_t>(getWidth()), static_cast<uint32_t>(getHeight()));
+//        if(view)
+//            view->Resize(static_cast<uint32_t>(getWidth()), static_cast<uint32_t>(getHeight()));
     }
 
     juce::Image CopyPixelsToTexture(void* pixels, uint32_t width, uint32_t height, uint32_t stride)
