@@ -1,22 +1,51 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Ultralight/Renderer.h"
 
 //==============================================================================
 AudioPluginAudioProcessor::AudioPluginAudioProcessor()
         : AudioProcessor (BusesProperties()
-#if ! JucePlugin_IsMidiEffect
-#if ! JucePlugin_IsSynth
-                                  .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-#endif
-                                  .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-#endif
-)
-//       apvts (*this, nullptr, "PARAMETERS", createParameterLayout())
+        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+), parameters (*this, nullptr, "PARAMETERS", {
+        std::make_unique<juce::AudioParameterFloat>("gain", "Gain", 0.0f, 1.0f, 0.5f)
+})
 {
+    // Add parameters to the AudioProcessorValueTreeState
+    parameters.state = juce::ValueTree(juce::Identifier("MyAudioProcessor"));
+
+    // ================================== ULTRALIGHT ==================================
+    Config config;
+
+    // We need to tell config where our resources are so it can load our bundled SSL certificates to make HTTPS requests.
+    config.resource_path = "/Users/max/CLionProjects/ultralight-juce/Libs/ultralight-sdk/bin/resources";
+    // The GPU renderer should be disabled to render Views to a pixel-buffer (Surface).
+    config.use_gpu_renderer = false;
+    // You can set a custom DPI scale here. Default is 1.0 (100%)
+    auto scale = juce::Desktop::getInstance().getDisplays().displays[0].scale;
+    config.device_scale = scale;
+
+    // Pass our configuration to the Platform singleton so that the library can use it.
+    Platform::instance().set_config(config);
+    // Use the OS's native font loader
+    Platform::instance().set_font_loader(GetPlatformFontLoader());
+    // Use the OS's native file loader, with a base directory
+    // All file:// URLs will load relative to this base directory.
+    // For shipping, this needs to be tied to JUCE Binary files or a custom resource directory
+    Platform::instance().set_file_system(GetPlatformFileSystem("/Users/max/CLionProjects/ultralight-juce/Resources"));
+    // Use the default logger (writes to a log file)
+    Platform::instance().set_logger(GetDefaultLogger("ultralight.log"));
+
+    // Create our Renderer (call this only once per application).
+    // The Renderer singleton maintains the lifetime of the library
+    // and is required before creating any Views.
+//    renderer = Renderer::Create();
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
 {
+//    renderer->PurgeMemory();
+//    renderer = nullptr;
 }
 
 void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
@@ -33,6 +62,12 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                               juce::MidiBuffer& midiMessages)
 {
     juce::ignoreUnused (midiMessages);
+
+    // Get the current value of the "gain" parameter
+    float gain = *parameters.getRawParameterValue("gain");
+
+    // Apply the gain to the audio buffer
+    buffer.applyGain(gain);
 
     juce::ScopedNoDenormals noDenormals;
 }
@@ -171,22 +206,27 @@ juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 //==============================================================================
 void AudioPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
-    juce::ignoreUnused (destData);
+    // Save the APVTS state to persist parameter values
+    juce::MemoryOutputStream stream(destData, false);
+    parameters.state.writeToStream(stream);
 }
 
 void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // You should use this method to restore your parameters from this memory block,
-    // whose contents will have been created by the getStateInformation() call.
-    juce::ignoreUnused (data, sizeInBytes);
+    // Load the APVTS state to restore parameter values
+    juce::MemoryInputStream stream(data, sizeInBytes, false);
+    parameters.state = juce::ValueTree::readFromStream(stream);
 }
 
 //==============================================================================
+
 // This creates new instances of the plugin..
+
+ultralight::RefPtr<ultralight::Renderer> AudioPluginAudioProcessor::RENDERER = nullptr;
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
+    if(AudioPluginAudioProcessor::RENDERER.get() == nullptr)
+        AudioPluginAudioProcessor::RENDERER = Renderer::Create();
     return new AudioPluginAudioProcessor();
 }

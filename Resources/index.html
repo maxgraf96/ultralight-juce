@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
+    <script type="text/javascript" src="script.js"></script>
     <style type="text/css">
 
         * {
@@ -67,11 +68,16 @@
     <div>center</div>
     <div>right</div>
 </div>
-<div style="display: flex; width: 100%; align-items: center; justify-content: center;">
-    <div class="box">
+<div style="display: flex; width: 100%; align-items: center; justify-content: center;flex-direction: column;">
+    <div class="box" id="box">
         <h2>Hello</h2>
         <p>again</p>
     </div>
+    <br>
+    <button id="myButton" onclick="OnButtonClick();">Go</button>
+    <div id="result"></div>
+    <div id="gain"></div>
+    <br>
 </div>
 </body>
 </html>

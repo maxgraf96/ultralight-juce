@@ -13,9 +13,12 @@
 #include <Ultralight/Ultralight.h>
 #include <AppCore/Platform.h>
 #include <readerwriterqueue.h>
+#include <JavaScriptCore/JSRetainPtr.h>
 
 #include "FileWatcher.hpp"
+#include "JavaScriptCore/JavaScriptCore.h"
 #include "Ultralight/RefPtr.h"
+#include "PluginProcessor.h"
 
 using namespace ultralight;
 
@@ -24,10 +27,16 @@ static int HEIGHT = 700;
 
 class GUIMainComponent :
         public juce::Component,
-        public juce::Timer {
+        public juce::AudioProcessorValueTreeState::Listener,
+        public juce::Timer,
+        public ultralight::LoadListener
+        {
 public:
 
-    GUIMainComponent() {
+//    GUIMainComponent(Renderer& renderer, juce::AudioProcessorValueTreeState& params) :
+    GUIMainComponent(juce::AudioProcessorValueTreeState& params) :
+//    renderer(renderer),
+    audioParams(params) {
         setSize(WIDTH, HEIGHT);
 
         auto scale = juce::Desktop::getInstance().getDisplays().displays[0].scale;
@@ -36,34 +45,9 @@ public:
         DBG("Current DPI: " << dpi << " Scale: " << scale);
 
         // ================================== ULTRALIGHT ==================================
-        Config config;
-
-        // We need to tell config where our resources are so it can load our bundled SSL certificates to make HTTPS requests.
-        config.resource_path = "/Users/max/CLionProjects/ultralight-juce/Libs/ultralight-sdk/bin/resources";
-        // The GPU renderer should be disabled to render Views to a pixel-buffer (Surface).
-        config.use_gpu_renderer = false;
-        // You can set a custom DPI scale here. Default is 1.0 (100%)
-        config.device_scale = JUCE_SCALE;
-
-        // Pass our configuration to the Platform singleton so that the library can use it.
-        Platform::instance().set_config(config);
-        // Use the OS's native font loader
-        Platform::instance().set_font_loader(GetPlatformFontLoader());
-        // Use the OS's native file loader, with a base directory
-        // All file:// URLs will load relative to this base directory.
-        // For shipping, this needs to be tied to JUCE Binary files or a custom resource directory
-        Platform::instance().set_file_system(GetPlatformFileSystem("/Users/max/CLionProjects/ultralight-juce/Resources"));
-        // Use the default logger (writes to a log file)
-        Platform::instance().set_logger(GetDefaultLogger("ultralight.log"));
-
-        // Create our Renderer (call this only once per application).
-        // The Renderer singleton maintains the lifetime of the library
-        // and is required before creating any Views.
-        // You should set up the Platform handlers before this.
-        renderer = Renderer::Create();
-
         // Create an HTML view that is WIDTH x HEIGHT
-        view = renderer->CreateView(WIDTH * JUCE_SCALE, HEIGHT * JUCE_SCALE, true, nullptr);
+        view = AudioPluginAudioProcessor::RENDERER->CreateView(WIDTH * JUCE_SCALE, HEIGHT * JUCE_SCALE, true, nullptr);
+        view->set_load_listener(this);
 
         // Load a raw string of HTML.
         // Load text from html file
@@ -76,18 +60,136 @@ public:
         view->Focus();
 
         fileWatcher = std::make_unique<FileWatcher>("/Users/max/CLionProjects/ultralight-juce/Resources");
-
         fileWatcher->AddCallback("index.html", [this](const std::string& filename) {
             DBG("File changed: " << filename);
             fileWatcherQueue.enqueue(filename);
         });
-
         fileWatcher->Start();
+
+        // Listen to APVTS changes
+        audioParams.addParameterListener("gain", this);
 
         startTimerHz(30);
     }
 
-    bool isPainting = false;
+    static JSValueRef OnButtonClick(JSContextRef ctx, JSObjectRef function,
+                             JSObjectRef thisObject, size_t argumentCount,
+                             const JSValueRef arguments[], JSValueRef* exception) {
+        const char* str = "document.getElementById('result').innerText = 'Ultralight rocks!'";
+
+        // Create our string of JavaScript
+        JSStringRef script = JSStringCreateWithUTF8CString(str);
+        // Execute it with JSEvaluateScript, ignoring other parameters for now
+        JSEvaluateScript(ctx, script, 0, 0, 0, 0);
+        // Release our string (we only Release what we Create)
+        JSStringRelease(script);
+
+        return JSValueMakeNull(ctx);
+    }
+
+    void GainUpdate(View* caller, float value){
+        Ref<JSContext> context = caller->LockJSContext();
+        JSContextRef ctx = context.get();
+        // Create our string of JavaScript, automatically managed by JSRetainPtr
+        JSRetainPtr<JSStringRef> str = adopt(
+                JSStringCreateWithUTF8CString("GainUpdate"));
+
+        // Evaluate the string "ShowMessage"
+        JSValueRef func = JSEvaluateScript(ctx, str.get(), 0, 0, 0, 0);
+
+        // Check if 'func' is actually an Object and not null
+        if (JSValueIsObject(ctx, func)) {
+            JSObjectRef funcObj = JSValueToObject(ctx, func, 0);
+            if (funcObj && JSObjectIsFunction(ctx, funcObj)) {
+                JSValueRef msgVal = JSValueMakeNumber(ctx, value);
+                JSValueRef args[] = { msgVal };
+
+                // Count the number of arguments in the array.
+                size_t num_args = 1;
+                // Create a place to store an exception, if any
+                JSValueRef exception = 0;
+                // Call the ShowMessage() function with our list of arguments.
+                JSValueRef result = JSObjectCallAsFunction(ctx, funcObj, 0, num_args, args, &exception);
+                if (exception) {
+                    // Handle any exceptions thrown from function here.
+                }
+                if (result) {
+                    // Handle result (if any) here.
+                }
+            }
+        }
+    }
+
+    virtual void OnDOMReady(View* caller,
+                            uint64_t frame_id,
+                            bool is_main_frame,
+                            const String& url) override {
+        // Acquire the JS execution context for the current page.
+        // This call will lock the execution context for the current
+        // thread as long as the Ref<> is alive.
+        Ref<JSContext> context = caller->LockJSContext();
+
+        // Get the underlying JSContextRef for use with the
+        // JavaScriptCore C API.
+        JSContextRef ctx = context.get();
+
+        // Get the ShowMessage function by evaluating a script. We could have
+        // also used JSContextGetGlobalObject() and JSObjectGetProperty() to
+        // retrieve this from the global window object as well.
+
+        // Create our string of JavaScript, automatically managed by JSRetainPtr
+        JSRetainPtr<JSStringRef> str = adopt(
+                JSStringCreateWithUTF8CString("ShowMessage"));
+
+        // Evaluate the string "ShowMessage"
+        JSValueRef func = JSEvaluateScript(ctx, str.get(), 0, 0, 0, 0);
+
+        // Check if 'func' is actually an Object and not null
+        if (JSValueIsObject(ctx, func)) {
+            // Cast 'func' to an Object, will return null if typecast failed.
+            JSObjectRef funcObj = JSValueToObject(ctx, func, 0);
+            // Check if 'funcObj' is a Function and not null
+            if (funcObj && JSObjectIsFunction(ctx, funcObj)) {
+                // Create a JS string from null-terminated UTF8 C-string, store it
+                // in a smart pointer to release it when it goes out of scope.
+                JSRetainPtr<JSStringRef> msg = adopt(JSStringCreateWithUTF8CString("Howdy"));
+                JSRetainPtr<JSStringRef> msg2 = adopt(JSStringCreateWithUTF8CString("Partner"));
+                JSRetainPtr<JSStringRef> msg3 = adopt(JSStringCreateWithUTF8CString("Wassup"));
+
+                // Read /Users/max/Library/SampleCluster/settings.json into a string
+                juce::File settingsFile = juce::File("/Users/max/Library/SampleCluster/settings.json");
+                juce::String settingsText = settingsFile.loadFileAsString();
+                JSRetainPtr<JSStringRef> settings = adopt(JSStringCreateWithUTF8CString(settingsText.toRawUTF8()));
+
+                // Create a JSValueRef from our JS string, store it in a smart
+                // pointer to release it when it goes out of scope.
+                 JSValueRef msgVal = JSValueMakeFromJSONString(ctx, settings.get());
+                 JSValueRef args[] = { msgVal };
+
+                // Create our list of arguments (we only have one)
+//                JSObjectRef array = JSObjectMakeArray(ctx, 0, NULL, NULL);
+//                JSObjectSetPropertyAtIndex(ctx, array, 0, JSValueMakeString(ctx, msg.get()), NULL);
+//                JSObjectSetPropertyAtIndex(ctx, array, 1, JSValueMakeString(ctx, msg2.get()), NULL);
+//                JSObjectSetPropertyAtIndex(ctx, array, 2, JSValueMakeString(ctx, msg3.get()), NULL);
+//                JSValueRef args[] = { array };
+
+                // Count the number of arguments in the array.
+                size_t num_args = 1;
+                // Create a place to store an exception, if any
+                JSValueRef exception = 0;
+                // Call the ShowMessage() function with our list of arguments.
+                JSValueRef result = JSObjectCallAsFunction(ctx, funcObj, 0, num_args, args, &exception);
+                if (exception) {
+                    // Handle any exceptions thrown from function here.
+                }
+                if (result) {
+                    // Handle result (if any) here.
+                }
+            }
+        }
+    }
+
+
     void paint(juce::Graphics& g) override
     {
         g.fillAll(juce::Colours::black);
@@ -99,8 +201,10 @@ public:
         }
 
         // Render all active Views (this updates the Surface for each View).
-        renderer->Update();
-        renderer->Render();
+        AudioPluginAudioProcessor::RENDERER->Update();
+        AudioPluginAudioProcessor::RENDERER->Render();
+//        renderer.Update();
+//        renderer.Render();
 
         // Get the Surface as a BitmapSurface (the default implementation).
         auto* surface = (BitmapSurface*)(view->surface());
@@ -198,13 +302,32 @@ public:
         repaint();
     }
 
+    void parameterChanged (const juce::String& parameterID, float newValue) override {
+        if(!view.get())
+            return;
+
+        // Gain
+        if(parameterID == "gain"){
+            // Execute on the main thread
+            juce::MessageManager::callAsync([this, newValue](){
+                GainUpdate(view.get(), newValue);
+            });
+        }
+    }
+
     ~GUIMainComponent() override {
+        stopTimer();
         fileWatcher->Stop();
+        view->set_load_listener(nullptr);
+        audioParams.removeParameterListener("gain", this);
     }
 
     // ================================== Fields ==================================
+    // APVTS
+    juce::AudioProcessorValueTreeState& audioParams;
+
     // Ultralight renderer
-    RefPtr<Renderer> renderer;
+//    Renderer& renderer;
     RefPtr<View> view;
 
     // JUCE Image we render the ultralight UI to

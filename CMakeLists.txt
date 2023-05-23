@@ -20,7 +20,7 @@ FetchContent_MakeAvailable(readerwriterqueue)
 set(SOURCES
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
-        # Add more source files here
+        Source/APVTSChangeBroadcaster.h
         )
 
 juce_add_plugin(${PROJECT_NAME}
@@ -38,7 +38,7 @@ juce_add_plugin(${PROJECT_NAME}
         DESCRIPTION "${TMPL_DESCRIPTION}"
         VST3_CATEGORIES "Instrument Synth Stereo"
         AU_MAIN_TYPE "kAudioUnitType_MusicDevice"
-        FORMATS VST3 AU Standalone
+        FORMATS VST3 Standalone
         BUNDLE_ID "${TMPL_BUNDLE_ID}"
         HARDENED_RUNTIME_ENABLED TRUE
         PRODUCT_NAME ${TMPL_SHORT_NAME})
@@ -108,3 +108,13 @@ target_link_libraries(${PROJECT_NAME}
         juce::juce_recommended_warning_flags
         readerwriterqueue
         )
+
+# Set the source file and destination directory
+set(source_file "/Users/max/CLionProjects/ultralight-juce/cmake-build-debug/UltralightJUCE_artefacts/Debug/VST3/UltralightJUCE.vst3")
+set(destination_dir "/Library/Audio/Plug-Ins/VST3")
+add_custom_command(
+        TARGET UltralightJUCE  # Specify your target name
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy "${source_file}" "${destination_dir}/UltralightJUCE.vst3"  # Copy the file
+        DEPENDS "${source_file}"   # Specify the dependency on the source file
+)

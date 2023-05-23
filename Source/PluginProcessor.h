@@ -1,19 +1,23 @@
 #pragma once
 
+#ifndef ULTRALIGHTJUCE_PLUGINPROCESSOR_H
+#define ULTRALIGHTJUCE_PLUGINPROCESSOR_H
+
+#include "Ultralight/RefPtr.h"
+#include "Ultralight/Renderer.h"
 #include <juce_audio_processors/juce_audio_processors.h>
-//#include <react_juce.h>
-
-//#include "SCEditor.h"
-
-//using namespace juce;
+#include <Ultralight/Ultralight.h>
 
 //==============================================================================
-class AudioPluginAudioProcessor  : public juce::AudioProcessor, public juce::ChangeBroadcaster
+class AudioPluginAudioProcessor  :
+        public juce::AudioProcessor,
+        public juce::ChangeBroadcaster
 {
 public:
     //==============================================================================
     AudioPluginAudioProcessor();
     ~AudioPluginAudioProcessor() override;
+    static ultralight::RefPtr<ultralight::Renderer> RENDERER;
 
     //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
@@ -47,7 +51,12 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-private:
+    juce::AudioProcessorValueTreeState parameters;
+//    ultralight::RefPtr<ultralight::Renderer> renderer;
 
+
+private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };
+
+#endif //ULTRALIGHTJUCE_PLUGINPROCESSOR_H
