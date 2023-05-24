@@ -36,9 +36,10 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 {
     juce::ignoreUnused (midiMessages);
 
+    buffer.clear();
+
     // Get the current value of the "gain" parameter
     float gain = *parameters.getRawParameterValue("gain");
-
     // Apply the gain to the audio buffer
     buffer.applyGain(gain);
 

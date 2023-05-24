@@ -46,7 +46,12 @@ public:
         // ================================== ULTRALIGHT ==================================
         // Create an HTML view that is WIDTH x HEIGHT
         view = AudioPluginAudioProcessor::RENDERER->CreateView(WIDTH * JUCE_SCALE, HEIGHT * JUCE_SCALE, true, nullptr);
+
+        // Set up JS interop for view
+        jsInterop = std::make_unique<JSInterop>(*view, audioParams);
+
         view->set_load_listener(this);
+        view->set_load_listener(jsInterop.get());
 
         // Load html file from URL - relative to resources folder set in PluginProcessor.cpp createPluginFilter() method
         view->LoadURL("file:///index.html");
@@ -70,26 +75,8 @@ public:
         // Listen to APVTS changes
         audioParams.addParameterListener("gain", this);
 
-        // Set up JS interop
-        jsInterop = std::make_unique<JSInterop>(*view);
-
         // Start timer to periodically redraw GUI
         startTimerHz(60);
-    }
-
-    static JSValueRef OnButtonClick(JSContextRef ctx, JSObjectRef function,
-                             JSObjectRef thisObject, size_t argumentCount,
-                             const JSValueRef arguments[], JSValueRef* exception) {
-        const char* str = "document.getElementById('result').innerText = 'Ultralight rocks!'";
-
-        // Create our string of JavaScript
-        JSStringRef script = JSStringCreateWithUTF8CString(str);
-        // Execute it with JSEvaluateScript, ignoring other parameters for now
-        JSEvaluateScript(ctx, script, 0, 0, 0, 0);
-        // Release our string (we only Release what we Create)
-        JSStringRelease(script);
-
-        return JSValueMakeNull(ctx);
     }
 
     virtual void OnDOMReady(View* caller,

@@ -5,25 +5,13 @@ function ShowMessage(messageObj) {
 
 function GainUpdate(value){
     // Rotate the gain knob
-    // Map value from 0-1 to -45 to 45
-    value = value * 90 - 45;
-    document.getElementById("gainKnob").style.transform = "rotate(" + value + "deg)";
+    // Map value from 0-1 to -145 to 145
+    value = value * 290 - 145;
+    var knob = document.querySelector('#gain svg');
+    knob.style.transform = "rotate(" + value + "deg)";
 }
 
 window.addEventListener('DOMContentLoaded', (event) => {
-
-
-    // const button = document.getElementById('myButton');
-    // button.addEventListener('click', buttonClick);
-    //
-    // let boxVisible = true;
-    // function buttonClick() {
-    //     boxVisible = !boxVisible;
-    //     document.getElementById("box").style.visibility = boxVisible ? 'visible' : 'hidden';
-    //
-    //
-    // }
-
     // Get the knob element
     var knob = document.querySelector('#gain svg');
 
@@ -59,6 +47,9 @@ window.addEventListener('DOMContentLoaded', (event) => {
         if (isDragging) {
             var angle = calculateAngle(event.clientX, event.clientY);
             knob.style.transform = 'rotate(' + angle + 'deg)';
+            // Update the gain value in JUCE
+            let juceGain = (angle + 145) / 290;
+            OnGainUpdate(juceGain);
         }
     });
 
