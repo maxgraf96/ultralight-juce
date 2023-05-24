@@ -46,10 +46,12 @@ window.addEventListener('DOMContentLoaded', (event) => {
     document.addEventListener('mousemove', function (event) {
         if (isDragging) {
             var angle = calculateAngle(event.clientX, event.clientY);
-            knob.style.transform = 'rotate(' + angle + 'deg)';
+            // knob.style.transform = 'rotate(' + angle + 'deg)';
             // Update the gain value in JUCE
             let juceGain = (angle + 145) / 290;
             OnGainUpdate(juceGain);
+            // Just to test jQuery
+            $('#gain svg').css('transform', 'rotate(' + angle + 'deg)');
         }
     });
 
