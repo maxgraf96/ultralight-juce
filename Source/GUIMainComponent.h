@@ -16,6 +16,7 @@
 #include <JavaScriptCore/JSRetainPtr.h>
 
 #include "FileWatcher.hpp"
+#include "JSInterop.h"
 #include "JavaScriptCore/JavaScriptCore.h"
 #include "Ultralight/RefPtr.h"
 #include "PluginProcessor.h"
@@ -32,11 +33,9 @@ class GUIMainComponent :
         public ultralight::LoadListener
         {
 public:
-
-//    GUIMainComponent(Renderer& renderer, juce::AudioProcessorValueTreeState& params) :
-    GUIMainComponent(juce::AudioProcessorValueTreeState& params) :
-//    renderer(renderer),
-    audioParams(params) {
+    GUIMainComponent(juce::AudioProcessorValueTreeState& params) : audioParams(params) {
+        // ================================== JUCE ==================================
+        // Set component size
         setSize(WIDTH, HEIGHT);
 
         auto scale = juce::Desktop::getInstance().getDisplays().displays[0].scale;
@@ -49,18 +48,20 @@ public:
         view = AudioPluginAudioProcessor::RENDERER->CreateView(WIDTH * JUCE_SCALE, HEIGHT * JUCE_SCALE, true, nullptr);
         view->set_load_listener(this);
 
-        // Load a raw string of HTML.
-        // Load text from html file
-        juce::String filePath = "/Users/max/CLionProjects/ultralight-juce/Resources/index.html";
-        juce::File htmlFile = juce::File(filePath);
-        juce::String htmlText = htmlFile.loadFileAsString();
+        // Load html file from URL - relative to resources folder set in PluginProcessor.cpp createPluginFilter() method
         view->LoadURL("file:///index.html");
 
-        // Notify the View it has input focus (updates appearance).
+        // Notify the View it has input focus (updates appearance)
         view->Focus();
 
+        // ================================== MISCELLANEOUS ==================================
+        // Add file watcher to watch for changes to index.html and reload the view
         fileWatcher = std::make_unique<FileWatcher>("/Users/max/CLionProjects/ultralight-juce/Resources");
         fileWatcher->AddCallback("index.html", [this](const std::string& filename) {
+            DBG("File changed: " << filename);
+            fileWatcherQueue.enqueue(filename);
+        });
+        fileWatcher->AddCallback("script.js", [this](const std::string& filename) {
             DBG("File changed: " << filename);
             fileWatcherQueue.enqueue(filename);
         });
@@ -69,7 +70,11 @@ public:
         // Listen to APVTS changes
         audioParams.addParameterListener("gain", this);
 
-        startTimerHz(30);
+        // Set up JS interop
+        jsInterop = std::make_unique<JSInterop>(*view);
+
+        // Start timer to periodically redraw GUI
+        startTimerHz(60);
     }
 
     static JSValueRef OnButtonClick(JSContextRef ctx, JSObjectRef function,
@@ -85,39 +90,6 @@ public:
         JSStringRelease(script);
 
         return JSValueMakeNull(ctx);
-    }
-
-    void GainUpdate(View* caller, float value){
-        Ref<JSContext> context = caller->LockJSContext();
-        JSContextRef ctx = context.get();
-        // Create our string of JavaScript, automatically managed by JSRetainPtr
-        JSRetainPtr<JSStringRef> str = adopt(
-                JSStringCreateWithUTF8CString("GainUpdate"));
-
-        // Evaluate the string "ShowMessage"
-        JSValueRef func = JSEvaluateScript(ctx, str.get(), 0, 0, 0, 0);
-
-        // Check if 'func' is actually an Object and not null
-        if (JSValueIsObject(ctx, func)) {
-            JSObjectRef funcObj = JSValueToObject(ctx, func, 0);
-            if (funcObj && JSObjectIsFunction(ctx, funcObj)) {
-                JSValueRef msgVal = JSValueMakeNumber(ctx, value);
-                JSValueRef args[] = { msgVal };
-
-                // Count the number of arguments in the array.
-                size_t num_args = 1;
-                // Create a place to store an exception, if any
-                JSValueRef exception = 0;
-                // Call the ShowMessage() function with our list of arguments.
-                JSValueRef result = JSObjectCallAsFunction(ctx, funcObj, 0, num_args, args, &exception);
-                if (exception) {
-                    // Handle any exceptions thrown from function here.
-                }
-                if (result) {
-                    // Handle result (if any) here.
-                }
-            }
-        }
     }
 
     virtual void OnDOMReady(View* caller,
@@ -203,8 +175,6 @@ public:
         // Render all active Views (this updates the Surface for each View).
         AudioPluginAudioProcessor::RENDERER->Update();
         AudioPluginAudioProcessor::RENDERER->Render();
-//        renderer.Update();
-//        renderer.Render();
 
         // Get the Surface as a BitmapSurface (the default implementation).
         auto* surface = (BitmapSurface*)(view->surface());
@@ -221,11 +191,13 @@ public:
             uint32_t height = bitmap->height();
             uint32_t stride = bitmap->row_bytes();
             // Copy the raw pixels into a JUCE Image.
+            // Always make sure that stride == width * 4
+            // TODO find a better solution for this
+            // The problem is probably that resize and repaint are called at the same time
             if(width * 4 == stride)
                 image = CopyPixelsToTexture(pixels, width, height, stride);
             bitmap->UnlockPixels();
             // Clear the dirty bounds.
-
             if(width * 4 == stride)
                 surface->ClearDirtyBounds();
         }
@@ -273,6 +245,18 @@ public:
         repaint();
     }
 
+    void mouseDrag(const juce::MouseEvent& event) override
+    {
+        DBG("Mouse drag: " << event.x << ", " << event.y);
+        MouseEvent evt{};
+        evt.type = MouseEvent::kType_MouseMoved;
+        evt.x = event.x;
+        evt.y = event.y;
+        evt.button = MouseEvent::kButton_Left;
+        view->FireMouseEvent(evt);
+        repaint();
+    }
+
     void mouseUp(const juce::MouseEvent& event) override
     {
         DBG("Mouse up: " << event.x << ", " << event.y);
@@ -310,15 +294,19 @@ public:
         if(parameterID == "gain"){
             // Execute on the main thread
             juce::MessageManager::callAsync([this, newValue](){
-                GainUpdate(view.get(), newValue);
+                jsInterop->InvokeMethod("GainUpdate", newValue);
             });
         }
     }
 
     ~GUIMainComponent() override {
+        // Stop timer -> no more redraws
         stopTimer();
+        // Stop the file watcher
         fileWatcher->Stop();
+        // Remove the load listener - removing this listener is important to avoid a crash on shutdown
         view->set_load_listener(nullptr);
+        // Remove the APVTS parameter listener(s)
         audioParams.removeParameterListener("gain", this);
     }
 
@@ -326,20 +314,21 @@ public:
     // APVTS
     juce::AudioProcessorValueTreeState& audioParams;
 
-    // Ultralight renderer
-//    Renderer& renderer;
+    // Main view
     RefPtr<View> view;
+
+    // JS interop
+    std::unique_ptr<JSInterop> jsInterop;
 
     // JUCE Image we render the ultralight UI to
     juce::Image image;
 
-    // File watcher
+    // File watcher fields
     std::unique_ptr<FileWatcher> fileWatcher;
     moodycamel::ReaderWriterQueue<std::string> fileWatcherQueue;
 
     // Scale multiplier from JUCE
     double JUCE_SCALE = 0;
-
 };
 
 

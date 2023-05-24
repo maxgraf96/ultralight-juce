@@ -20,7 +20,7 @@ FetchContent_MakeAvailable(readerwriterqueue)
 set(SOURCES
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
-        Source/APVTSChangeBroadcaster.h
+        Source/JSInterop.h
         )
 
 juce_add_plugin(${PROJECT_NAME}
