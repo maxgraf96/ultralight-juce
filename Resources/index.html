@@ -6,6 +6,9 @@
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.4/dist/js/splide.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.4/dist/css/splide.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/wavesurfer.js"></script>
+
+
     <script type="text/javascript" src="script.js"></script>
     <style type="text/css">
 
@@ -138,30 +141,44 @@
     <br>
     <br>
     <br>
-    <section class="splide" aria-labelledby="carousel-heading">
-        <h2 id="carousel-heading">Splide Basic HTML Example</h2>
-        <br>
-        <br>
-        <br>
+<!--    <section class="splide" aria-labelledby="carousel-heading">-->
+<!--        <h2 id="carousel-heading">Splide Basic HTML Example</h2>-->
+<!--        <br>-->
+<!--        <br>-->
+<!--        <br>-->
 
-        <div class="splide__track">
-            <ul class="splide__list">
-                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>
-                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>
-                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>
-                <li class="splide__slide">Textslide</li>
-            </ul>
-        </div>
-    </section>
+<!--        <div class="splide__track">-->
+<!--            <ul class="splide__list">-->
+<!--                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>-->
+<!--                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>-->
+<!--                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>-->
+<!--                <li class="splide__slide">Textslide</li>-->
+<!--            </ul>-->
+<!--        </div>-->
+<!--    </section>-->
+
+    <div id="waveform"></div>
+
     <script type="text/javascript">
         document.addEventListener( 'DOMContentLoaded', function() {
-            var splide = new Splide( '.splide', {
-                type   : 'loop',
-                padding: '5rem',
-            } );
-            splide.mount();
+            // var splide = new Splide( '.splide', {
+            //     type   : 'loop',
+            //     padding: '5rem',
+            // } );
+            // splide.mount();
+
+            var wavesurfer = WaveSurfer.create({
+                container: '#waveform',
+                waveColor: 'violet',
+                progressColor: 'purple'
+            });
+            wavesurfer.load('vivivi.wav');
+            // wavesurfer.load('http://ia902606.us.archive.org/35/items/shortpoetry_047_librivox/song_cjrg_teasdale_64kb.mp3');
+
         } );
     </script>
+
+
 </div>
 </body>
 </html>

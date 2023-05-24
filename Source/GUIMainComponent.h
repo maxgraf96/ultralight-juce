@@ -5,6 +5,7 @@
 #ifndef ULTRALIGHTJUCE_GUIMAINCOMPONENT_H
 #define ULTRALIGHTJUCE_GUIMAINCOMPONENT_H
 
+#include <__utility/pair.h>
 #include <memory>
 #include <string>
 
@@ -20,20 +21,21 @@
 #include "JavaScriptCore/JavaScriptCore.h"
 #include "Ultralight/RefPtr.h"
 #include "PluginProcessor.h"
+#include "InspectorModalWindow.h"
 
 using namespace ultralight;
 
 static int WIDTH = 1024;
 static int HEIGHT = 700;
+static int INSPECTOR_Y_OFFSET = 500;
 
 class GUIMainComponent :
         public juce::Component,
         public juce::AudioProcessorValueTreeState::Listener,
         public juce::Timer,
-        public ultralight::LoadListener
-        {
+        public ultralight::LoadListener {
 public:
-    GUIMainComponent(juce::AudioProcessorValueTreeState& params) : audioParams(params) {
+    GUIMainComponent(juce::AudioProcessorValueTreeState &params) : audioParams(params) {
         // ================================== JUCE ==================================
         // Set component size
         setSize(WIDTH, HEIGHT);
@@ -46,6 +48,8 @@ public:
         // ================================== ULTRALIGHT ==================================
         // Create an HTML view that is WIDTH x HEIGHT
         view = AudioPluginAudioProcessor::RENDERER->CreateView(WIDTH * JUCE_SCALE, HEIGHT * JUCE_SCALE, true, nullptr);
+        inspectorView = view->inspector();
+        inspectorView->Resize(WIDTH * JUCE_SCALE, 500);
 
         // Set up JS interop for view
         jsInterop = std::make_unique<JSInterop>(*view, audioParams);
@@ -58,15 +62,16 @@ public:
 
         // Notify the View it has input focus (updates appearance)
         view->Focus();
+        inspectorView->Focus();
 
         // ================================== MISCELLANEOUS ==================================
         // Add file watcher to watch for changes to index.html and reload the view
         fileWatcher = std::make_unique<FileWatcher>("/Users/max/CLionProjects/ultralight-juce/Resources");
-        fileWatcher->AddCallback("index.html", [this](const std::string& filename) {
+        fileWatcher->AddCallback("index.html", [this](const std::string &filename) {
             DBG("File changed: " << filename);
             fileWatcherQueue.enqueue(filename);
         });
-        fileWatcher->AddCallback("script.js", [this](const std::string& filename) {
+        fileWatcher->AddCallback("script.js", [this](const std::string &filename) {
             DBG("File changed: " << filename);
             fileWatcherQueue.enqueue(filename);
         });
@@ -79,10 +84,10 @@ public:
         startTimerHz(60);
     }
 
-    virtual void OnDOMReady(View* caller,
+    virtual void OnDOMReady(View *caller,
                             uint64_t frame_id,
                             bool is_main_frame,
-                            const String& url) override {
+                            const String &url) override {
         // Acquire the JS execution context for the current page.
         // This call will lock the execution context for the current
         // thread as long as the Ref<> is alive.
@@ -122,8 +127,8 @@ public:
 
                 // Create a JSValueRef from our JS string, store it in a smart
                 // pointer to release it when it goes out of scope.
-                 JSValueRef msgVal = JSValueMakeFromJSONString(ctx, settings.get());
-                 JSValueRef args[] = { msgVal };
+                JSValueRef msgVal = JSValueMakeFromJSONString(ctx, settings.get());
+                JSValueRef args[] = {msgVal};
 
                 // Create our list of arguments (we only have one)
 //                JSObjectRef array = JSObjectMakeArray(ctx, 0, NULL, NULL);
@@ -149,12 +154,11 @@ public:
     }
 
 
-    void paint(juce::Graphics& g) override
-    {
+    void paint(juce::Graphics &g) override {
         g.fillAll(juce::Colours::black);
 
         std::string out;
-        while(fileWatcherQueue.try_dequeue(out)){
+        while (fileWatcherQueue.try_dequeue(out)) {
             // TODO: If multiple views, keep a map of files and their views
             view->Reload();
         }
@@ -164,29 +168,47 @@ public:
         AudioPluginAudioProcessor::RENDERER->Render();
 
         // Get the Surface as a BitmapSurface (the default implementation).
-        auto* surface = (BitmapSurface*)(view->surface());
+        auto *surface = (BitmapSurface *) (view->surface());
+        auto *inspectorSurface = (BitmapSurface *) (inspectorView->surface());
 
         // Check if our Surface is dirty (pixels have changed).
-        if (!surface->dirty_bounds().IsEmpty()){
+        if (!surface->dirty_bounds().IsEmpty()) {
             // Get the pixel-buffer Surface for a View.
             RefPtr<Bitmap> bitmap = surface->bitmap();
+            RefPtr<Bitmap> inspectorBitmap = inspectorSurface->bitmap();
             // Lock the Bitmap to retrieve the raw pixels.
             // The format is BGRA, 8-bpp, premultiplied alpha.
-            void* pixels = bitmap->LockPixels();
+            void *pixels = bitmap->LockPixels();
+            void *inspectorPixels = inspectorBitmap->LockPixels();
             // Get the bitmap dimensions.
             uint32_t width = bitmap->width();
             uint32_t height = bitmap->height();
             uint32_t stride = bitmap->row_bytes();
+            uint32_t inspectorWidth = inspectorBitmap->width();
+            uint32_t inspectorHeight = inspectorBitmap->height();
+            uint32_t inspectorStride = inspectorBitmap->row_bytes();
             // Copy the raw pixels into a JUCE Image.
             // Always make sure that stride == width * 4
             // TODO find a better solution for this
             // The problem is probably that resize and repaint are called at the same time
-            if(width * 4 == stride)
-                image = CopyPixelsToTexture(pixels, width, height, stride);
+            if (width * 4 == stride && inspectorWidth * 4 == inspectorStride) {
+                auto images = CopyPixelsToTexture(pixels, width, height, stride, inspectorPixels, inspectorWidth,
+                                                  inspectorHeight, inspectorStride);
+                image = std::get<0>(images);
+                inspectorImage = std::get<1>(images);
+
+                if(inspectorModalWindow == nullptr){
+                    inspectorModalWindow = std::make_unique<InspectorModalWindow>(inspectorView, inspectorImage);
+                    inspectorModalWindow->setSize(inspectorImage.getWidth(), inspectorImage.getHeight());
+                }
+            }
             bitmap->UnlockPixels();
+            inspectorBitmap->UnlockPixels();
             // Clear the dirty bounds.
             if(width * 4 == stride)
                 surface->ClearDirtyBounds();
+            if(inspectorWidth * 4 == inspectorStride)
+                inspectorSurface->ClearDirtyBounds();
         }
 
         // Draw the Image to the screen.
@@ -204,6 +226,7 @@ public:
             view->Resize(static_cast<uint32_t>(WIDTH * JUCE_SCALE), static_cast<uint32_t>(HEIGHT * JUCE_SCALE));
             view->Reload();
             view->Focus();
+            inspectorView->Focus();
         }
     }
 
@@ -217,6 +240,7 @@ public:
         evt.y = event.y;
         evt.button = MouseEvent::kButton_None;
         view->FireMouseEvent(evt);
+        inspectorView->FireMouseEvent(evt);
         repaint();
     }
 
@@ -227,8 +251,9 @@ public:
         evt.type = MouseEvent::kType_MouseDown;
         evt.x = event.x;
         evt.y = event.y;
-        evt.button = MouseEvent::kButton_Left;
+        evt.button = event.mods.isLeftButtonDown() ? MouseEvent::kButton_Left : MouseEvent::kButton_Right;
         view->FireMouseEvent(evt);
+        inspectorView->FireMouseEvent(evt);
         repaint();
     }
 
@@ -239,8 +264,9 @@ public:
         evt.type = MouseEvent::kType_MouseMoved;
         evt.x = event.x;
         evt.y = event.y;
-        evt.button = MouseEvent::kButton_Left;
+        evt.button = event.mods.isLeftButtonDown() ? MouseEvent::kButton_Left : MouseEvent::kButton_Right;
         view->FireMouseEvent(evt);
+        inspectorView->FireMouseEvent(evt);
         repaint();
     }
 
@@ -251,21 +277,41 @@ public:
         evt.type = MouseEvent::kType_MouseUp;
         evt.x = event.x;
         evt.y = event.y;
-        evt.button = MouseEvent::kButton_Left;
+        evt.button = event.mods.isLeftButtonDown() ? MouseEvent::kButton_Left : MouseEvent::kButton_Right;
         view->FireMouseEvent(evt);
+        inspectorView->FireMouseEvent(evt);
         repaint();
     }
 
-    static juce::Image CopyPixelsToTexture(void* pixels, uint32_t width, uint32_t height, uint32_t stride)
+    static std::tuple<juce::Image, juce::Image> CopyPixelsToTexture(
+            void* pixels,
+            uint32_t width,
+            uint32_t height,
+            uint32_t stride,
+            void* inspectorPixels,
+            uint32_t inspectorWidth,
+            uint32_t inspectorHeight,
+            uint32_t inspectorStride)
     {
         juce::Image image(juce::Image::ARGB, width, height, false);
         juce::Image::BitmapData bitmapData(image, 0, 0, width, height, juce::Image::BitmapData::writeOnly);
         bitmapData.pixelFormat = juce::Image::ARGB;
 
+        // Inspector
+        juce::Image inspectorImage(juce::Image::ARGB, inspectorWidth, inspectorHeight, false);
+        juce::Image::BitmapData inspectorBitmapData(inspectorImage, 0, 0, inspectorWidth, inspectorHeight, juce::Image::BitmapData::writeOnly);
+        inspectorBitmapData.pixelFormat = juce::Image::ARGB;
+
         if(width * 4 == stride)
             std::memcpy(bitmapData.data, pixels, stride * height);
+        if(inspectorWidth * 4 == inspectorStride)
+            std::memcpy(inspectorBitmapData.data, inspectorPixels, inspectorStride * inspectorHeight);
 
-        return image;
+        // Overlay inspector image
+//        juce::Graphics g(image);
+//        g.drawImageAt(inspectorImage, 0, 0);
+
+        return std::make_tuple(image, inspectorImage);
     }
 
     void timerCallback() override
@@ -303,16 +349,20 @@ public:
 
     // Main view
     RefPtr<View> view;
+    RefPtr<View> inspectorView;
 
     // JS interop
     std::unique_ptr<JSInterop> jsInterop;
 
     // JUCE Image we render the ultralight UI to
     juce::Image image;
+    juce::Image inspectorImage;
 
     // File watcher fields
     std::unique_ptr<FileWatcher> fileWatcher;
     moodycamel::ReaderWriterQueue<std::string> fileWatcherQueue;
+
+    std::unique_ptr<InspectorModalWindow> inspectorModalWindow;
 
     // Scale multiplier from JUCE
     double JUCE_SCALE = 0;

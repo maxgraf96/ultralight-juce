@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 14)
 
 # Add JUCE as a subdirectory
 add_subdirectory(JUCE)
+add_definitions(-DJUCE_MODAL_LOOPS_PERMITTED=1)
 
 add_subdirectory(Libs/ultralight-sdk)
 
@@ -21,6 +22,7 @@ set(SOURCES
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/JSInterop.h
+        Source/InspectorModalWindow.h
         )
 
 juce_add_plugin(${PROJECT_NAME}

@@ -4,6 +4,9 @@
 Libs/*
 .idea
 
+# People should copy the inspector folder content from their own ultralight version
+Resources/inspector/*
+
 JUCE
 Data/*
 cmake-build-debug
