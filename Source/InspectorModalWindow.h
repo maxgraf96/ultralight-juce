@@ -3,9 +3,14 @@
 //
 #pragma once
 
+#include "Ultralight/KeyEvent.h"
+#include "Ultralight/String.h"
+#include <codecvt>
 #ifndef ULTRALIGHTJUCE_INSPECTORMODALWINDOW_H
 #define ULTRALIGHTJUCE_INSPECTORMODALWINDOW_H
 
+#include <string>
+#include <regex>
 #include <JuceHeader.h>
 #include <Ultralight/Ultralight.h>
 
@@ -16,7 +21,7 @@ public:
     image(imageRef), inspectorView(inspectorViewIn), JUCE_SCALE(scale)
     {
         // Set the size of the component based on the image size
-        setSize(image.getWidth(), image.getHeight());
+        setSize(inspectorView->width(), inspectorView->height());
     }
 
     void paint(juce::Graphics& g) override
@@ -126,10 +131,13 @@ private:
     double& JUCE_SCALE;
 };
 
-class InspectorModalWindow : public juce::DocumentWindow {
+class InspectorModalWindow :
+        public juce::DocumentWindow,
+        public juce::KeyListener {
 public:
     InspectorModalWindow(ultralight::RefPtr<ultralight::View>& inspectorViewIn, juce::Image& imageRef, double& scale)
     : juce::DocumentWindow("Inspector", juce::Colours::white, TitleBarButtons::allButtons, true),
+    JUCE_SCALE(scale),
     inspectorView(inspectorViewIn)
     {
         // Create the image component
@@ -147,6 +155,20 @@ public:
         setResizable(true, true);
         // Show the modal window
         setVisible(true);
+        setWantsKeyboardFocus(true);
+        addKeyListener(this);
+    }
+
+    void resized() override
+    {
+        if (inspectorView.get() != nullptr && imageComponent != nullptr){
+            auto w = getWidth();
+            DBG("Inspector resized: " << w << ", " << getHeight());
+            auto h = getHeight();
+            inspectorView->Resize(static_cast<uint32_t>(w * JUCE_SCALE), static_cast<uint32_t>(h * JUCE_SCALE));
+            inspectorView->Reload();
+            inspectorView->Focus();
+        }
     }
 
     void activeWindowStatusChanged() override
@@ -156,6 +178,7 @@ public:
             // The main window has gained focus
             // Perform actions when the main window gets focus
             inspectorView->Focus();
+            setWantsKeyboardFocus(true);
         }
         else
         {
@@ -164,14 +187,82 @@ public:
         }
     }
 
+    bool keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent) override
+    {
+        // Check if key character contains only single letter or number
+        std::regex regexPattern("^[A-Za-z0-9]$");
+        // Convert from wchar_t to string
+        auto wstr = std::wstring(1, key.getTextCharacter()).c_str();
+        std::string str = converter.to_bytes(wstr);
+
+        ultralight::KeyEvent evt;
+        if(std::regex_match(str, regexPattern)){
+            // Single character
+            evt.type = ultralight::KeyEvent::kType_Char;
+            ultralight::String keyStr(str.c_str());
+            evt.text = keyStr;
+            evt.native_key_code = 0;
+            evt.modifiers = 0;
+            evt.unmodified_text = evt.text; // If not available, set to same as evt.text
+        } else {
+            // Special keys
+            evt.type = ultralight::KeyEvent::kType_RawKeyDown;
+            evt.virtual_key_code = mapJUCEKeyCodeToUltralight(key.getKeyCode());
+            evt.native_key_code = 0;
+            evt.modifiers = 0;
+            GetKeyIdentifierFromVirtualKeyCode(evt.virtual_key_code, evt.key_identifier);
+        }
+
+        inspectorView->FireKeyEvent(evt);
+
+        return true; // Indicate that the key press is consumed
+    }
+
     void closeButtonPressed() override
     {
         // Close the modal window
-        delete this;
+        setVisible(false);
     }
+
+    int mapJUCEKeyCodeToUltralight(int juceKeyCode)
+    {
+        if (juceKeyCode == juce::KeyPress::backspaceKey) return ultralight::KeyCodes::GK_BACK;
+        else if (juceKeyCode == juce::KeyPress::tabKey) return ultralight::KeyCodes::GK_TAB;
+        else if (juceKeyCode == juce::KeyPress::returnKey) return ultralight::KeyCodes::GK_RETURN;
+        else if (juceKeyCode == juce::KeyPress::escapeKey) return ultralight::KeyCodes::GK_ESCAPE;
+        else if (juceKeyCode == juce::KeyPress::spaceKey) return ultralight::KeyCodes::GK_SPACE;
+        else if (juceKeyCode == juce::KeyPress::deleteKey) return ultralight::KeyCodes::GK_DELETE;
+        else if (juceKeyCode == juce::KeyPress::homeKey) return ultralight::KeyCodes::GK_HOME;
+        else if (juceKeyCode == juce::KeyPress::endKey) return ultralight::KeyCodes::GK_END;
+        else if (juceKeyCode == juce::KeyPress::pageUpKey) return ultralight::KeyCodes::GK_PRIOR;
+        else if (juceKeyCode == juce::KeyPress::pageDownKey) return ultralight::KeyCodes::GK_NEXT;
+        else if (juceKeyCode == juce::KeyPress::leftKey) return ultralight::KeyCodes::GK_LEFT;
+        else if (juceKeyCode == juce::KeyPress::rightKey) return ultralight::KeyCodes::GK_RIGHT;
+        else if (juceKeyCode == juce::KeyPress::upKey) return ultralight::KeyCodes::GK_UP;
+        else if (juceKeyCode == juce::KeyPress::downKey) return ultralight::KeyCodes::GK_DOWN;
+        else if (juceKeyCode == juce::KeyPress::F1Key) return ultralight::KeyCodes::GK_F1;
+        else if (juceKeyCode == juce::KeyPress::F2Key) return ultralight::KeyCodes::GK_F2;
+        else if (juceKeyCode == juce::KeyPress::F3Key) return ultralight::KeyCodes::GK_F3;
+        else if (juceKeyCode == juce::KeyPress::F4Key) return ultralight::KeyCodes::GK_F4;
+        else if (juceKeyCode == juce::KeyPress::F5Key) return ultralight::KeyCodes::GK_F5;
+        else if (juceKeyCode == juce::KeyPress::F6Key) return ultralight::KeyCodes::GK_F6;
+        else if (juceKeyCode == juce::KeyPress::F7Key) return ultralight::KeyCodes::GK_F7;
+        else if (juceKeyCode == juce::KeyPress::F8Key) return ultralight::KeyCodes::GK_F8;
+        else if (juceKeyCode == juce::KeyPress::F9Key) return ultralight::KeyCodes::GK_F9;
+        else if (juceKeyCode == juce::KeyPress::F10Key) return ultralight::KeyCodes::GK_F10;
+        else if (juceKeyCode == juce::KeyPress::F11Key) return ultralight::KeyCodes::GK_F11;
+        else if (juceKeyCode == juce::KeyPress::F12Key) return ultralight::KeyCodes::GK_F12;
+            // Add more if-else conditions for other JUCE keycodes as needed
+        else return -1; // Return -1 if there's no matching Ultralight keycode
+    }
+
 private:
     std::unique_ptr<ImageComponent> imageComponent;
     ultralight::RefPtr<ultralight::View>& inspectorView;
+    double& JUCE_SCALE;
+
+    // For string conversions
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
 };
 #endif //ULTRALIGHTJUCE_INSPECTORMODALWINDOW_H

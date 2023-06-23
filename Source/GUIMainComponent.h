@@ -33,6 +33,7 @@ class GUIMainComponent :
         public juce::Component,
         public juce::AudioProcessorValueTreeState::Listener,
         public juce::Timer,
+        public juce::KeyListener,
         public ultralight::LoadListener {
 public:
     GUIMainComponent(juce::AudioProcessorValueTreeState &params) : audioParams(params) {
@@ -79,6 +80,10 @@ public:
 
         // Listen to APVTS changes
         audioParams.addParameterListener("gain", this);
+
+        // Listen to keyboard presses
+        addKeyListener(this);
+        setWantsKeyboardFocus(true);
 
         // Start timer to periodically redraw GUI
         startTimerHz(60);
@@ -304,6 +309,24 @@ public:
                 jsInterop->InvokeMethod("GainUpdate", newValue);
             });
         }
+    }
+
+    bool keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent) override
+    {
+        if (key.getTextCharacter() == 'i')
+        {
+            // "I" key is pressed
+            // Hide/show inspector window
+            if(inspectorModalWindow.get() == nullptr){
+                inspectorModalWindow = std::make_unique<InspectorModalWindow>(inspectorView, inspectorImage, JUCE_SCALE);
+            }
+            else{
+                inspectorModalWindow->setVisible(!inspectorModalWindow->isVisible());
+            }
+            return true; // Return true to indicate that the key press is consumed
+        }
+
+        return false; // Return false to allow the key press to propagate to other components
     }
 
     ~GUIMainComponent() override {
