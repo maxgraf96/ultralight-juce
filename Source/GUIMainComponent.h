@@ -169,46 +169,32 @@ public:
 
         // Get the Surface as a BitmapSurface (the default implementation).
         auto *surface = (BitmapSurface *) (view->surface());
-        auto *inspectorSurface = (BitmapSurface *) (inspectorView->surface());
 
         // Check if our Surface is dirty (pixels have changed).
         if (!surface->dirty_bounds().IsEmpty()) {
             // Get the pixel-buffer Surface for a View.
             RefPtr<Bitmap> bitmap = surface->bitmap();
-            RefPtr<Bitmap> inspectorBitmap = inspectorSurface->bitmap();
             // Lock the Bitmap to retrieve the raw pixels.
             // The format is BGRA, 8-bpp, premultiplied alpha.
             void *pixels = bitmap->LockPixels();
-            void *inspectorPixels = inspectorBitmap->LockPixels();
             // Get the bitmap dimensions.
             uint32_t width = bitmap->width();
             uint32_t height = bitmap->height();
             uint32_t stride = bitmap->row_bytes();
-            uint32_t inspectorWidth = inspectorBitmap->width();
-            uint32_t inspectorHeight = inspectorBitmap->height();
-            uint32_t inspectorStride = inspectorBitmap->row_bytes();
             // Copy the raw pixels into a JUCE Image.
             // Always make sure that stride == width * 4
             // TODO find a better solution for this
             // The problem is probably that resize and repaint are called at the same time
-            if (width * 4 == stride && inspectorWidth * 4 == inspectorStride) {
-                auto images = CopyPixelsToTexture(pixels, width, height, stride, inspectorPixels, inspectorWidth,
-                                                  inspectorHeight, inspectorStride);
-                image = std::get<0>(images);
-                inspectorImage = std::get<1>(images);
-
+            if (width * 4 == stride) {
+                image = CopyPixelsToTexture(pixels, width, height, stride);
                 if(inspectorModalWindow == nullptr){
-                    inspectorModalWindow = std::make_unique<InspectorModalWindow>(inspectorView, inspectorImage);
-                    inspectorModalWindow->setSize(inspectorImage.getWidth(), inspectorImage.getHeight());
+                    inspectorModalWindow = std::make_unique<InspectorModalWindow>(inspectorView, inspectorImage, JUCE_SCALE);
                 }
             }
             bitmap->UnlockPixels();
-            inspectorBitmap->UnlockPixels();
             // Clear the dirty bounds.
             if(width * 4 == stride)
                 surface->ClearDirtyBounds();
-            if(inspectorWidth * 4 == inspectorStride)
-                inspectorSurface->ClearDirtyBounds();
         }
 
         // Draw the Image to the screen.
@@ -240,7 +226,6 @@ public:
         evt.y = event.y;
         evt.button = MouseEvent::kButton_None;
         view->FireMouseEvent(evt);
-        inspectorView->FireMouseEvent(evt);
         repaint();
     }
 
@@ -253,7 +238,6 @@ public:
         evt.y = event.y;
         evt.button = event.mods.isLeftButtonDown() ? MouseEvent::kButton_Left : MouseEvent::kButton_Right;
         view->FireMouseEvent(evt);
-        inspectorView->FireMouseEvent(evt);
         repaint();
     }
 
@@ -266,7 +250,6 @@ public:
         evt.y = event.y;
         evt.button = event.mods.isLeftButtonDown() ? MouseEvent::kButton_Left : MouseEvent::kButton_Right;
         view->FireMouseEvent(evt);
-        inspectorView->FireMouseEvent(evt);
         repaint();
     }
 
@@ -279,44 +262,35 @@ public:
         evt.y = event.y;
         evt.button = event.mods.isLeftButtonDown() ? MouseEvent::kButton_Left : MouseEvent::kButton_Right;
         view->FireMouseEvent(evt);
-        inspectorView->FireMouseEvent(evt);
         repaint();
     }
 
-    static std::tuple<juce::Image, juce::Image> CopyPixelsToTexture(
+    static juce::Image CopyPixelsToTexture(
             void* pixels,
             uint32_t width,
             uint32_t height,
-            uint32_t stride,
-            void* inspectorPixels,
-            uint32_t inspectorWidth,
-            uint32_t inspectorHeight,
-            uint32_t inspectorStride)
+            uint32_t stride)
     {
         juce::Image image(juce::Image::ARGB, width, height, false);
         juce::Image::BitmapData bitmapData(image, 0, 0, width, height, juce::Image::BitmapData::writeOnly);
         bitmapData.pixelFormat = juce::Image::ARGB;
 
-        // Inspector
-        juce::Image inspectorImage(juce::Image::ARGB, inspectorWidth, inspectorHeight, false);
-        juce::Image::BitmapData inspectorBitmapData(inspectorImage, 0, 0, inspectorWidth, inspectorHeight, juce::Image::BitmapData::writeOnly);
-        inspectorBitmapData.pixelFormat = juce::Image::ARGB;
-
         if(width * 4 == stride)
             std::memcpy(bitmapData.data, pixels, stride * height);
-        if(inspectorWidth * 4 == inspectorStride)
-            std::memcpy(inspectorBitmapData.data, inspectorPixels, inspectorStride * inspectorHeight);
 
         // Overlay inspector image
 //        juce::Graphics g(image);
 //        g.drawImageAt(inspectorImage, 0, 0);
 
-        return std::make_tuple(image, inspectorImage);
+        return image;
     }
 
     void timerCallback() override
     {
         repaint();
+        if(inspectorModalWindow.get() != nullptr && inspectorModalWindow->isActiveWindow()){
+            inspectorModalWindow->repaint();
+        }
     }
 
     void parameterChanged (const juce::String& parameterID, float newValue) override {

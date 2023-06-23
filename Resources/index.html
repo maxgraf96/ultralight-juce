@@ -137,42 +137,44 @@
         <span>Gain</span>
         <br>
         <button class="testBtn" onclick="OnButtonClick()">test</button>
+        <span>This is my button subtext</span>
+
     </div>
     <br>
     <br>
     <br>
-<!--    <section class="splide" aria-labelledby="carousel-heading">-->
-<!--        <h2 id="carousel-heading">Splide Basic HTML Example</h2>-->
-<!--        <br>-->
-<!--        <br>-->
-<!--        <br>-->
+    <section class="splide" aria-labelledby="carousel-heading">
+        <h2 id="carousel-heading">Splide Basic HTML Example</h2>
+        <br>
+        <br>
+        <br>
 
-<!--        <div class="splide__track">-->
-<!--            <ul class="splide__list">-->
-<!--                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>-->
-<!--                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>-->
-<!--                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>-->
-<!--                <li class="splide__slide">Textslide</li>-->
-<!--            </ul>-->
-<!--        </div>-->
-<!--    </section>-->
+        <div class="splide__track">
+            <ul class="splide__list">
+                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>
+                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>
+                <li class="splide__slide"><img src="img/knob.svg" style="width: 200px;"></li>
+                <li class="splide__slide">Textslide</li>
+            </ul>
+        </div>
+    </section>
 
     <div id="waveform"></div>
 
     <script type="text/javascript">
         document.addEventListener( 'DOMContentLoaded', function() {
-            // var splide = new Splide( '.splide', {
-            //     type   : 'loop',
-            //     padding: '5rem',
-            // } );
-            // splide.mount();
+            var splide = new Splide( '.splide', {
+                type   : 'loop',
+                padding: '5rem',
+            } );
+            splide.mount();
 
-            var wavesurfer = WaveSurfer.create({
-                container: '#waveform',
-                waveColor: 'violet',
-                progressColor: 'purple'
-            });
-            wavesurfer.load('vivivi.wav');
+            // var wavesurfer = WaveSurfer.create({
+            //     container: '#waveform',
+            //     waveColor: 'violet',
+            //     progressColor: 'purple'
+            // });
+            // wavesurfer.load('vivivi.wav');
             // wavesurfer.load('http://ia902606.us.archive.org/35/items/shortpoetry_047_librivox/song_cjrg_teasdale_64kb.mp3');
 
         } );
