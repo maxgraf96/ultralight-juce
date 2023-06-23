@@ -125,6 +125,22 @@ public:
         repaint();
     }
 
+    void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override
+    {
+        // Handle the scroll event here
+        const float scrollDeltaX = wheel.deltaX;
+        const float scrollDeltaY = wheel.deltaY;
+
+        // Perform actions based on the scroll direction and amount
+        ultralight::ScrollEvent evt{};
+        evt.type = ultralight::ScrollEvent::kType_ScrollByPixel;
+        // Scroll Y
+        evt.delta_x = static_cast<int>(scrollDeltaX * 100.0);
+        evt.delta_y = static_cast<int>(scrollDeltaY * 1000.0);
+        DBG("Inspector Mouse wheel x: " << evt.delta_x << ", y:" << evt.delta_y);
+        inspectorView->FireScrollEvent(evt);
+    }
+
 private:
     juce::Image& image;
     ultralight::RefPtr<ultralight::View>& inspectorView;
