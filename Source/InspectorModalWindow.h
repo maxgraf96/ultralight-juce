@@ -42,16 +42,10 @@ public:
             uint32_t height = bitmap->height();
             uint32_t stride = bitmap->row_bytes();
             // Copy the raw pixels into a JUCE Image.
-            // Always make sure that stride == width * 4
-            // TODO find a better solution for this
-            // The problem is probably that resize and repaint are called at the same time
-            if (width * 4 == stride && width * 4 == stride) {
-                image = CopyPixelsToTexture(pixels, width, height, stride);
-            }
+            image = CopyPixelsToTexture(pixels, width, height, stride);
             bitmap->UnlockPixels();
             // Clear the dirty bounds.
-            if (width * 4 == stride)
-                surface->ClearDirtyBounds();
+            surface->ClearDirtyBounds();
         }
 
         // Draw the image onto the component
@@ -62,24 +56,35 @@ public:
     }
 
     static juce::Image CopyPixelsToTexture(
-            void* pixels,
+            void *pixels,
             uint32_t width,
             uint32_t height,
-            uint32_t stride)
-    {
-        juce::Image image(juce::Image::ARGB, width, height, false);
-        juce::Image::BitmapData bitmapData(image, 0, 0, width, height, juce::Image::BitmapData::writeOnly);
+            uint32_t stride) {
+        juce::Image image(juce::Image::ARGB, static_cast<int>(width), static_cast<int>(height), false);
+        juce::Image::BitmapData bitmapData(image, 0, 0, static_cast<int>(width), static_cast<int>(height),
+                                           juce::Image::BitmapData::writeOnly);
         bitmapData.pixelFormat = juce::Image::ARGB;
 
-        if(width * 4 == stride)
+        // Normal case: the stride is the same as the width * 4 (4 bytes per pixel)
+        // In this case, we can just memcpy the image
+        if (width * 4 == stride){
             std::memcpy(bitmapData.data, pixels, stride * height);
+        }
+            // Special case: the stride is different from the width * 4
+            // In this case, we need to copy the image line by line
+            // The reason for this special case is that in some cases, the stride is not the same as the width * 4,
+            // for example when the JUCE window width is uneven (e.g. 1001px)
+        else{
+            for (uint32_t y = 0; y < height; ++y)
+                std::memcpy(bitmapData.getLinePointer(static_cast<int>(y)), static_cast<uint8_t *>(pixels) + y * stride, width * 4);
+        }
 
         return image;
     }
 
     void mouseMove(const juce::MouseEvent& event) override
     {
-        DBG("Inspector Mouse moved: " << event.x << ", " << event.y);
+//        DBG("Inspector Mouse moved: " << event.x << ", " << event.y);
         ultralight::MouseEvent evt{};
         evt.type = ultralight::MouseEvent::kType_MouseMoved;
         evt.x = event.x;
@@ -91,7 +96,7 @@ public:
 
     void mouseDown(const juce::MouseEvent& event) override
     {
-        DBG("Inspector Mouse down: " << event.x << ", " << event.y);
+//        DBG("Inspector Mouse down: " << event.x << ", " << event.y);
         ultralight::MouseEvent evt{};
         evt.type = ultralight::MouseEvent::kType_MouseDown;
         evt.x = event.x;
@@ -103,7 +108,7 @@ public:
 
     void mouseDrag(const juce::MouseEvent& event) override
     {
-        DBG("Inspector Mouse drag: " << event.x << ", " << event.y);
+//        DBG("Inspector Mouse drag: " << event.x << ", " << event.y);
         ultralight::MouseEvent evt{};
         evt.type = ultralight::MouseEvent::kType_MouseMoved;
         evt.x = event.x;
@@ -115,7 +120,7 @@ public:
 
     void mouseUp(const juce::MouseEvent& event) override
     {
-        DBG("Inspector Mouse up: " << event.x << ", " << event.y);
+//        DBG("Inspector Mouse up: " << event.x << ", " << event.y);
         ultralight::MouseEvent evt{};
         evt.type = ultralight::MouseEvent::kType_MouseUp;
         evt.x = event.x;
@@ -137,7 +142,7 @@ public:
         // Scroll Y
         evt.delta_x = static_cast<int>(scrollDeltaX * 100.0);
         evt.delta_y = static_cast<int>(scrollDeltaY * 1000.0);
-        DBG("Inspector Mouse wheel x: " << evt.delta_x << ", y:" << evt.delta_y);
+//        DBG("Inspector Mouse wheel x: " << evt.delta_x << ", y:" << evt.delta_y);
         inspectorView->FireScrollEvent(evt);
     }
 
@@ -160,12 +165,12 @@ public:
         imageComponent = std::make_unique<ImageComponent>(imageRef, inspectorViewIn, scale);
 
         // Set the content component of the modal window
-        setContentOwned(imageComponent.get(), true);
+        setContentOwned(imageComponent.get(), false);
         setUsingNativeTitleBar(true);
         setOpaque(true);
 
         // Set the size of the modal window
-        setSize(imageComponent->getWidth() / scale, imageComponent->getHeight() / scale);
+        setSize(1024, 768);
 
         setDraggable(true);
         setResizable(true, true);
@@ -177,13 +182,17 @@ public:
 
     void resized() override
     {
+        auto w = getWidth();
+        auto h = getHeight();
+        // Update JUCE modal window size
+        setSize(w, h);
+
         if (inspectorView.get() != nullptr && imageComponent != nullptr){
-            auto w = getWidth();
-            DBG("Inspector resized: " << w << ", " << getHeight());
-            auto h = getHeight();
+            // Update Ultralight view size
             inspectorView->Resize(static_cast<uint32_t>(w * JUCE_SCALE), static_cast<uint32_t>(h * JUCE_SCALE));
-            inspectorView->Reload();
             inspectorView->Focus();
+            // Update JUCE image component size
+            imageComponent->setSize(static_cast<int>(w * JUCE_SCALE), static_cast<int>(h * JUCE_SCALE));
         }
     }
 

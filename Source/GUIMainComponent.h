@@ -42,9 +42,8 @@ public:
         setSize(WIDTH, HEIGHT);
 
         auto scale = juce::Desktop::getInstance().getDisplays().displays[0].scale;
-        auto dpi = juce::Desktop::getInstance().getDisplays().displays[0].dpi;
         JUCE_SCALE = scale;
-        DBG("Current DPI: " << dpi << " Scale: " << scale);
+        DBG("Current monitor scale: " << scale);
 
         // ================================== ULTRALIGHT ==================================
         // Create an HTML view that is WIDTH x HEIGHT
@@ -168,7 +167,7 @@ public:
             view->Reload();
         }
 
-        // Render all active Views (this updates the Surface for each View).
+        // Update and render all active Ultralight Views (this updates the Surface for each View).
         AudioPluginAudioProcessor::RENDERER->Update();
         AudioPluginAudioProcessor::RENDERER->Render();
 
@@ -187,43 +186,42 @@ public:
             uint32_t height = bitmap->height();
             uint32_t stride = bitmap->row_bytes();
             // Copy the raw pixels into a JUCE Image.
-            // Always make sure that stride == width * 4
-            // TODO find a better solution for this
-            // The problem is probably that resize and repaint are called at the same time
-            if (width * 4 == stride) {
-                image = CopyPixelsToTexture(pixels, width, height, stride);
-                if(inspectorModalWindow == nullptr){
-                    inspectorModalWindow = std::make_unique<InspectorModalWindow>(inspectorView, inspectorImage, JUCE_SCALE);
-                }
+            image = CopyPixelsToTexture(pixels, width, height, stride);
+
+            // Spawn inspector if it doesn't exist
+            if (inspectorModalWindow == nullptr) {
+                inspectorModalWindow = std::make_unique<InspectorModalWindow>(inspectorView, inspectorImage,
+                                                                              JUCE_SCALE);
+                // Hide inspector initially
+                inspectorModalWindow->setVisible(false);
             }
+
+            // Unlock the Bitmap and mark the Surface as clean.
             bitmap->UnlockPixels();
-            // Clear the dirty bounds.
-            if(width * 4 == stride)
-                surface->ClearDirtyBounds();
+            surface->ClearDirtyBounds();
+//            DBG("JUCE WIDTH: " << WIDTH << " HEIGHT: " << HEIGHT << " IMAGE WIDTH: " << (int) width << " HEIGHT: " << (int) height << " STRIDE: " << (int) stride);
         }
 
-        // Draw the Image to the screen.
+        // Draw the image we just got from Ultralight to the screen.
         g.drawImage(image,
                     0, 0, WIDTH, HEIGHT,
                     0, 0, static_cast<int>(WIDTH * JUCE_SCALE), static_cast<int>(HEIGHT * JUCE_SCALE));
     }
 
-    void resized() override
-    {
+    void resized() override {
+        setSize(getParentWidth(), getParentHeight());
+
         // Resize the View to the new size of the window.
-        if(view.get()){
+        if (view.get()) {
             WIDTH = getParentWidth();
             HEIGHT = getParentHeight();
             view->Resize(static_cast<uint32_t>(WIDTH * JUCE_SCALE), static_cast<uint32_t>(HEIGHT * JUCE_SCALE));
-            view->Reload();
             view->Focus();
-            inspectorView->Focus();
         }
     }
 
     // ================================== Mouse events ==================================
-    void mouseMove(const juce::MouseEvent& event) override
-    {
+    void mouseMove(const juce::MouseEvent &event) override {
         DBG("Mouse moved: " << event.x << ", " << event.y);
         MouseEvent evt{};
         evt.type = MouseEvent::kType_MouseMoved;
@@ -234,8 +232,7 @@ public:
         repaint();
     }
 
-    void mouseDown(const juce::MouseEvent& event) override
-    {
+    void mouseDown(const juce::MouseEvent &event) override {
         DBG("Mouse down: " << event.x << ", " << event.y);
         MouseEvent evt{};
         evt.type = MouseEvent::kType_MouseDown;
@@ -246,8 +243,7 @@ public:
         repaint();
     }
 
-    void mouseDrag(const juce::MouseEvent& event) override
-    {
+    void mouseDrag(const juce::MouseEvent &event) override {
         DBG("Mouse drag: " << event.x << ", " << event.y);
         MouseEvent evt{};
         evt.type = MouseEvent::kType_MouseMoved;
@@ -258,8 +254,7 @@ public:
         repaint();
     }
 
-    void mouseUp(const juce::MouseEvent& event) override
-    {
+    void mouseUp(const juce::MouseEvent &event) override {
         DBG("Mouse up: " << event.x << ", " << event.y);
         MouseEvent evt{};
         evt.type = MouseEvent::kType_MouseUp;
@@ -271,56 +266,60 @@ public:
     }
 
     static juce::Image CopyPixelsToTexture(
-            void* pixels,
+            void *pixels,
             uint32_t width,
             uint32_t height,
-            uint32_t stride)
-    {
-        juce::Image image(juce::Image::ARGB, width, height, false);
-        juce::Image::BitmapData bitmapData(image, 0, 0, width, height, juce::Image::BitmapData::writeOnly);
+            uint32_t stride) {
+        juce::Image image(juce::Image::ARGB, static_cast<int>(width), static_cast<int>(height), false);
+        juce::Image::BitmapData bitmapData(image, 0, 0, static_cast<int>(width), static_cast<int>(height),
+                                           juce::Image::BitmapData::writeOnly);
         bitmapData.pixelFormat = juce::Image::ARGB;
 
-        if(width * 4 == stride)
+        // Normal case: the stride is the same as the width * 4 (4 bytes per pixel)
+        // In this case, we can just memcpy the image
+        if (width * 4 == stride){
             std::memcpy(bitmapData.data, pixels, stride * height);
-
-        // Overlay inspector image
-//        juce::Graphics g(image);
-//        g.drawImageAt(inspectorImage, 0, 0);
+        }
+        // Special case: the stride is different from the width * 4
+        // In this case, we need to copy the image line by line
+        // The reason for this special case is that in some cases, the stride is not the same as the width * 4,
+        // for example when the JUCE window width is uneven (e.g. 1001px)
+        else{
+            for (uint32_t y = 0; y < height; ++y)
+                std::memcpy(bitmapData.getLinePointer(static_cast<int>(y)), static_cast<uint8_t *>(pixels) + y * stride, width * 4);
+        }
 
         return image;
     }
 
-    void timerCallback() override
-    {
+    void timerCallback() override {
         repaint();
-        if(inspectorModalWindow.get() != nullptr && inspectorModalWindow->isActiveWindow()){
+        if (inspectorModalWindow.get() != nullptr && inspectorModalWindow->isActiveWindow()) {
             inspectorModalWindow->repaint();
         }
     }
 
-    void parameterChanged (const juce::String& parameterID, float newValue) override {
-        if(!view.get())
+    void parameterChanged(const juce::String &parameterID, float newValue) override {
+        if (!view.get())
             return;
 
         // Gain
-        if(parameterID == "gain"){
+        if (parameterID == "gain") {
             // Execute on the main thread
-            juce::MessageManager::callAsync([this, newValue](){
+            juce::MessageManager::callAsync([this, newValue]() {
                 jsInterop->InvokeMethod("GainUpdate", newValue);
             });
         }
     }
 
-    bool keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent) override
-    {
-        if (key.getTextCharacter() == 'i')
-        {
+    bool keyPressed(const juce::KeyPress &key, juce::Component *originatingComponent) override {
+        if (key.getTextCharacter() == 'i') {
             // "I" key is pressed
             // Hide/show inspector window
-            if(inspectorModalWindow.get() == nullptr){
-                inspectorModalWindow = std::make_unique<InspectorModalWindow>(inspectorView, inspectorImage, JUCE_SCALE);
-            }
-            else{
+            if (inspectorModalWindow.get() == nullptr) {
+                inspectorModalWindow = std::make_unique<InspectorModalWindow>(inspectorView, inspectorImage,
+                                                                              JUCE_SCALE);
+            } else {
                 inspectorModalWindow->setVisible(!inspectorModalWindow->isVisible());
             }
             return true; // Return true to indicate that the key press is consumed
@@ -342,7 +341,7 @@ public:
 
     // ================================== Fields ==================================
     // APVTS
-    juce::AudioProcessorValueTreeState& audioParams;
+    juce::AudioProcessorValueTreeState &audioParams;
 
     // Main view
     RefPtr<View> view;
@@ -359,7 +358,11 @@ public:
     std::unique_ptr<FileWatcher> fileWatcher;
     moodycamel::ReaderWriterQueue<std::string> fileWatcherQueue;
 
+    // Inspector window
     std::unique_ptr<InspectorModalWindow> inspectorModalWindow;
+
+    // Helpers
+    bool isResizing = false;
 
     // Scale multiplier from JUCE
     double JUCE_SCALE = 0;
