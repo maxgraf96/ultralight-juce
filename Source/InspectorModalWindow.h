@@ -215,7 +215,7 @@ public:
     bool keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent) override
     {
         // Check if key character contains only single letter or number
-        std::regex regexPattern("^[A-Za-z0-9]$");
+        std::regex regexPattern(R"([A-Za-z0-9`\-=[\\\];',./~!@#$%^&*()_+{}|:"<>?\u0020])");
         // Convert from wchar_t to string
         auto wstr = std::wstring(1, key.getTextCharacter()).c_str();
         std::string str = converter.to_bytes(wstr);
