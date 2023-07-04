@@ -308,9 +308,9 @@ public:
         std::vector<T> list;
         JSObjectRef jsArray = JSValueToObject(ctx, value, nullptr);
         if (jsArray != nullptr) {
-            size_t length = JSObjectGetTypedArrayLength(ctx, jsArray, nullptr);
+            size_t length = JSValueToNumber(ctx, JSObjectGetProperty(ctx, jsArray, JSStringCreateWithUTF8CString("length"), nullptr), nullptr);
             for (size_t i = 0; i < length; ++i) {
-                JSValueRef jsValue = JSObjectGetPropertyAtIndex(ctx, jsArray, i, nullptr);
+                JSValueRef jsValue = JSObjectGetPropertyAtIndex(ctx, jsArray, static_cast<uint32_t>(i), nullptr);
                 list.push_back(GetJSValue<T>(ctx, jsValue));
             }
         } else {
