@@ -21,7 +21,8 @@ FetchContent_MakeAvailable(readerwriterqueue)
 set(SOURCES
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
-        Source/JSInterop.h
+        Source/JSInteropBase.h
+        Source/JSInteropExample.h
         Source/InspectorModalWindow.h
         )
 

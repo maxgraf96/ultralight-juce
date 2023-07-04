@@ -17,7 +17,8 @@
 #include <JavaScriptCore/JSRetainPtr.h>
 
 #include "FileWatcher.hpp"
-#include "JSInterop.h"
+#include "JSInteropBase.h"
+#include "JSInteropExample.h"
 #include "JavaScriptCore/JavaScriptCore.h"
 #include "Ultralight/RefPtr.h"
 #include "PluginProcessor.h"
@@ -55,9 +56,8 @@ public:
         inspectorView->Resize(WIDTH * JUCE_SCALE, 500);
 
         // Set up JS interop for view
-        jsInterop = std::make_unique<JSInterop>(*view, audioParams, *this);
-
-        view->set_load_listener(this);
+        jsInterop = std::make_unique<JSInteropExample>(*view, audioParams, *this);
+        // Tell ultralight that for this view, we want to use this JSInteropExample instance to handle the interop
         view->set_load_listener(jsInterop.get());
 
         // Load html file from URL - relative to resources folder set in PluginProcessor.cpp createPluginFilter() method
@@ -277,7 +277,7 @@ public:
     RefPtr<View> inspectorView;
 
     // JS interop
-    std::unique_ptr<JSInterop> jsInterop;
+    std::unique_ptr<JSInteropExample> jsInterop;
 
     // JUCE Image we render the ultralight UI to
     juce::Image image;
