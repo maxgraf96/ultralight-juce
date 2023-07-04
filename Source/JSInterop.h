@@ -15,9 +15,10 @@ class JSInterop :
         public ultralight::LoadListener
         {
 public:
-    JSInterop(ultralight::View& inView, juce::AudioProcessorValueTreeState& params)
-    : view(inView), audioParams(params)
-    {}
+    JSInterop(ultralight::View& inView, juce::AudioProcessorValueTreeState& params, juce::AudioProcessorValueTreeState::Listener& parentComponent)
+    : view(inView), audioParams(params), parent(parentComponent)
+    {
+    }
 
     // ========================================================================================================
     // C++ -> JS
@@ -32,22 +33,23 @@ public:
         JSValueRef func = JSEvaluateScript(ctx, methodNameSTR.get(), nullptr, nullptr, 0, nullptr);
 
         if (JSValueIsObject(ctx, func)) {
-            JSObjectRef funcObj = JSValueToObject(ctx, func, 0);
+            JSObjectRef funcObj = JSValueToObject(ctx, func, nullptr);
             if (funcObj && JSObjectIsFunction(ctx, funcObj)) {
                 JSValueRef argVal = CreateJSValue(ctx, value);
                 JSValueRef args[] = { argVal };
                 size_t num_args = 1;
                 JSValueRef exception = nullptr;
-                JSValueRef result = JSObjectCallAsFunction(ctx, funcObj, 0, num_args, args, &exception);
+                JSValueRef result = JSObjectCallAsFunction(ctx, funcObj, nullptr, num_args, args, &exception);
                 if (exception) {
                     // Handle any exceptions thrown from function here.
+                    DBG("JSInterop::InvokeMethod: " + methodName + " threw an exception on the JS side. Double check that the data you are passing is correct and that the JS function is valid.");
                 }
                 if (result) {
                     // Handle result (if any) here.
                 }
             }
         } else {
-            DBG("JSInterop::InvokeMethod: " + methodName + " is not a valid JS function or threw and exception.");
+            DBG("JSInterop::InvokeMethod: " + methodName + " is not a valid JS function or threw an exception.");
         }
     }
 
@@ -59,22 +61,28 @@ public:
         return JSValueMakeUndefined(ctx);
     }
 
-    // Specialization for float
+    // float
     template<>
     JSValueRef CreateJSValue(JSContextRef ctx, const float& value) {
         return JSValueMakeNumber(ctx, static_cast<double>(value));
     }
 
-    // Specialization for int
+    // int
     template<>
     JSValueRef CreateJSValue(JSContextRef ctx, const int& value) {
         return JSValueMakeNumber(ctx, static_cast<double>(value));
     }
 
-    // Specialization for bool
+    // bool
     template<>
     JSValueRef CreateJSValue(JSContextRef ctx, const bool& value) {
         return JSValueMakeBoolean(ctx, value);
+    }
+
+    // String
+    template<>
+    JSValueRef CreateJSValue(JSContextRef ctx, const juce::String& value) {
+        return JSValueMakeString(ctx, JSStringCreateWithUTF8CString(value.toRawUTF8()));
     }
 
     // ========================================================================================================
@@ -128,7 +136,17 @@ public:
         // If you don't require access to member variables, you can register them directly (without wrapping)
         // In that case, the "JSValueRef OnButtonClick(){...}" below would be made static
         registerCppFunctionInJS("OnButtonClick", OnButtonClick);
-        registerCppFunctionInJS("OnGainUpdate", OnGainUpdate);
+        registerCppFunctionInJS("OnParameterUpdate", OnParameterUpdate);
+
+        // ================================== JUCE APVTS PARAMS ==================================
+        // Propagate all parameters that were loaded from disk to JS
+        for(auto param : audioParams.processor.getParameters()) {
+            // Check if parameter is a float parameter
+            if(auto* floatParam = dynamic_cast<juce::AudioParameterFloat*>(param)) {
+                parent.parameterChanged(floatParam->getParameterID(), floatParam->get());
+            }
+            // TODO Add other parameter types
+        }
     }
 
     /// \brief Gets the instance pointer from the JS object
@@ -163,19 +181,26 @@ public:
         return JSValueMakeNull(ctx);
     }
 
-    static JSValueRef OnGainUpdate(JSContextRef ctx, JSObjectRef function,
-                             JSObjectRef thisObject, size_t argumentCount,
-                             const JSValueRef arguments[], JSValueRef* exception) {
+    static JSValueRef OnParameterUpdate(JSContextRef ctx, JSObjectRef function,
+                                   JSObjectRef thisObject, size_t argumentCount,
+                                   const JSValueRef arguments[], JSValueRef* exception) {
         // Get the class instance pointer from the JS object
         auto* instance = GetInstance(ctx);
 
-        // Update the gain value in JUCE
-        float newValue = JSValueToNumber(ctx, arguments[0], nullptr);
+        // Get the parameter ID
+        auto parameterID = JSValueToStringCopy(ctx, arguments[0], nullptr);
+        // Allocate a char* of length JSStringGetLength(parameterID)
+        char* parameterIDStr = new char[JSStringGetLength(parameterID)];
+        JSStringGetUTF8CString(parameterID, parameterIDStr, JSStringGetLength(parameterID));
 
-        // Use instance instead of "this"
-        auto* gainParam = instance->audioParams.getParameter("gain");
-        if(gainParam != nullptr)
-            gainParam->setValueNotifyingHost(newValue);
+        // Get the parameter value
+        auto newValue = JSValueToNumber(ctx, arguments[1], nullptr);
+
+        // Update the parameter value in JUCE
+        instance->audioParams.getParameter(parameterIDStr)->setValueNotifyingHost(static_cast<float>(newValue));
+
+        JSStringRelease(parameterID);
+        delete[] parameterIDStr;
         return JSValueMakeNull(ctx);
     }
 
@@ -184,6 +209,7 @@ private:
     // The view (in the future hopefully views) that we want to interact with
     ultralight::View& view;
     juce::AudioProcessorValueTreeState& audioParams;
+    juce::AudioProcessorValueTreeState::Listener& parent;
 
 
 };

@@ -1,6 +1,38 @@
-function ShowMessage(messageObj) {
-    document.getElementById("result").innerHTML = JSON.stringify(messageObj, null, 2);
-    // document.getElementById("result").innerHTML = message + " " + m2 + " " + m3;
+const parser = new DOMParser();
+let APVTS = null;
+
+/**
+ * Called by JUCE whenever there is a change in the APVTS parameters
+ * @param xml The XML string containing the APVTS parameters. You can parse this and update your UI accordingly as below,
+ * or write some more advanced logic to do more complex state management for your UI elements.
+ * @constructor
+ */
+function APVTSUpdate(xml) {
+    // Parse the XML string into an XML document
+    const xmlDoc = parser.parseFromString(xml, "text/xml");
+    // Get all PARAM elements from the XML document
+    const paramElements = xmlDoc.getElementsByTagName("PARAM");
+    // Iterate through all PARAM elements
+    for (let i = 0; i < paramElements.length; i++) {
+        const paramElement = paramElements[i];
+        const id = paramElement.getAttribute("id");
+        const value = paramElement.getAttribute("value");
+
+        // Match all relevant ids from the APVTS XML to their UI elements
+        switch (id) {
+            case "gain":
+                // Call the GainUpdate function with the value
+                GainUpdate(value);
+                break;
+            // Add more cases for other relevant ids and their corresponding UI elements
+            // case "otherId":
+            //   OtherUpdate(value);
+            //   break;
+            default:
+                // Handle unknown ids or do nothing
+                break;
+        }
+    }
 }
 
 function GainUpdate(value){
@@ -46,11 +78,10 @@ window.addEventListener('DOMContentLoaded', (event) => {
     document.addEventListener('mousemove', function (event) {
         if (isDragging) {
             var angle = calculateAngle(event.clientX, event.clientY);
-            // knob.style.transform = 'rotate(' + angle + 'deg)';
             // Update the gain value in JUCE
             let juceGain = (angle + 145) / 290;
-            OnGainUpdate(juceGain);
-            // Just to test jQuery
+            OnParameterUpdate("gain", juceGain);
+            // Using jQuery
             $('#gain svg').css('transform', 'rotate(' + angle + 'deg)');
         }
     });

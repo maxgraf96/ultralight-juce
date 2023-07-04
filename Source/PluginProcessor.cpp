@@ -11,14 +11,10 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
         std::make_unique<juce::AudioParameterFloat>("gain", "Gain", 0.0f, 1.0f, 0.5f)
 })
 {
-    // Add parameters to the AudioProcessorValueTreeState
-    parameters.state = juce::ValueTree(juce::Identifier("MyAudioProcessor"));
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
 {
-//    renderer->PurgeMemory();
-//    renderer = nullptr;
 }
 
 void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
@@ -181,15 +177,23 @@ juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 void AudioPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     // Save the APVTS state to persist parameter values
-    juce::MemoryOutputStream stream(destData, false);
-    parameters.state.writeToStream(stream);
+//    juce::MemoryOutputStream stream(destData, false);
+//    parameters.state.writeToStream(stream);
+
+    juce::ValueTree state = parameters.copyState();
+    std::unique_ptr<juce::XmlElement> xml = state.createXml();
+    copyXmlToBinary(*xml, destData);
 }
 
 void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     // Load the APVTS state to restore parameter values
-    juce::MemoryInputStream stream(data, sizeInBytes, false);
-    parameters.state = juce::ValueTree::readFromStream(stream);
+    std::unique_ptr<juce::XmlElement> xmlState = getXmlFromBinary(data, sizeInBytes);
+    if (xmlState != nullptr && xmlState->hasTagName(parameters.state.getType()))
+    {
+        juce::ValueTree newState = juce::ValueTree::fromXml(*xmlState);
+        parameters.replaceState(newState);
+    }
 }
 
 //==============================================================================

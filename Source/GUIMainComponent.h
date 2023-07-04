@@ -41,6 +41,9 @@ public:
         // Set component size
         setSize(WIDTH, HEIGHT);
 
+        // Listen to APVTS changes
+        audioParams.addParameterListener("gain", this);
+
         auto scale = juce::Desktop::getInstance().getDisplays().displays[0].scale;
         JUCE_SCALE = scale;
         DBG("Current monitor scale: " << scale);
@@ -52,7 +55,7 @@ public:
         inspectorView->Resize(WIDTH * JUCE_SCALE, 500);
 
         // Set up JS interop for view
-        jsInterop = std::make_unique<JSInterop>(*view, audioParams);
+        jsInterop = std::make_unique<JSInterop>(*view, audioParams, *this);
 
         view->set_load_listener(this);
         view->set_load_listener(jsInterop.get());
@@ -77,9 +80,6 @@ public:
         });
         fileWatcher->Start();
 
-        // Listen to APVTS changes
-        audioParams.addParameterListener("gain", this);
-
         // Listen to keyboard presses
         addKeyListener(this);
         setWantsKeyboardFocus(true);
@@ -87,76 +87,6 @@ public:
         // Start timer to periodically redraw GUI
         startTimerHz(60);
     }
-
-    virtual void OnDOMReady(View *caller,
-                            uint64_t frame_id,
-                            bool is_main_frame,
-                            const String &url) override {
-        // Acquire the JS execution context for the current page.
-        // This call will lock the execution context for the current
-        // thread as long as the Ref<> is alive.
-        Ref<JSContext> context = caller->LockJSContext();
-
-        // Get the underlying JSContextRef for use with the
-        // JavaScriptCore C API.
-        JSContextRef ctx = context.get();
-
-        // Get the ShowMessage function by evaluating a script. We could have
-        // also used JSContextGetGlobalObject() and JSObjectGetProperty() to
-        // retrieve this from the global window object as well.
-
-        // Create our string of JavaScript, automatically managed by JSRetainPtr
-        JSRetainPtr<JSStringRef> str = adopt(
-                JSStringCreateWithUTF8CString("ShowMessage"));
-
-        // Evaluate the string "ShowMessage"
-        JSValueRef func = JSEvaluateScript(ctx, str.get(), 0, 0, 0, 0);
-
-        // Check if 'func' is actually an Object and not null
-        if (JSValueIsObject(ctx, func)) {
-            // Cast 'func' to an Object, will return null if typecast failed.
-            JSObjectRef funcObj = JSValueToObject(ctx, func, 0);
-            // Check if 'funcObj' is a Function and not null
-            if (funcObj && JSObjectIsFunction(ctx, funcObj)) {
-                // Create a JS string from null-terminated UTF8 C-string, store it
-                // in a smart pointer to release it when it goes out of scope.
-                JSRetainPtr<JSStringRef> msg = adopt(JSStringCreateWithUTF8CString("Howdy"));
-                JSRetainPtr<JSStringRef> msg2 = adopt(JSStringCreateWithUTF8CString("Partner"));
-                JSRetainPtr<JSStringRef> msg3 = adopt(JSStringCreateWithUTF8CString("Wassup"));
-
-                // Read /Users/max/Library/SampleCluster/settings.json into a string
-                juce::File settingsFile = juce::File("/Users/max/Library/SampleCluster/settings.json");
-                juce::String settingsText = settingsFile.loadFileAsString();
-                JSRetainPtr<JSStringRef> settings = adopt(JSStringCreateWithUTF8CString(settingsText.toRawUTF8()));
-
-                // Create a JSValueRef from our JS string, store it in a smart
-                // pointer to release it when it goes out of scope.
-                JSValueRef msgVal = JSValueMakeFromJSONString(ctx, settings.get());
-                JSValueRef args[] = {msgVal};
-
-                // Create our list of arguments (we only have one)
-//                JSObjectRef array = JSObjectMakeArray(ctx, 0, NULL, NULL);
-//                JSObjectSetPropertyAtIndex(ctx, array, 0, JSValueMakeString(ctx, msg.get()), NULL);
-//                JSObjectSetPropertyAtIndex(ctx, array, 1, JSValueMakeString(ctx, msg2.get()), NULL);
-//                JSObjectSetPropertyAtIndex(ctx, array, 2, JSValueMakeString(ctx, msg3.get()), NULL);
-//                JSValueRef args[] = { array };
-
-                // Count the number of arguments in the array.
-                size_t num_args = 1;
-                // Create a place to store an exception, if any
-                JSValueRef exception = 0;
-                // Call the ShowMessage() function with our list of arguments.
-                JSValueRef result = JSObjectCallAsFunction(ctx, funcObj, 0, num_args, args, &exception);
-                if (exception) {
-                    // Handle any exceptions thrown from function here.
-                }
-                if (result) {
-                    // Handle result (if any) here.
-                }
-            }
-        }
-    }
-
 
     void paint(juce::Graphics &g) override {
         g.fillAll(juce::Colours::black);
@@ -294,7 +224,7 @@ public:
 
     void timerCallback() override {
         repaint();
-        if (inspectorModalWindow.get() != nullptr && inspectorModalWindow->isActiveWindow()) {
+        if (inspectorModalWindow != nullptr && inspectorModalWindow->isActiveWindow()) {
             inspectorModalWindow->repaint();
         }
     }
@@ -303,20 +233,19 @@ public:
         if (!view.get())
             return;
 
-        // Gain
-        if (parameterID == "gain") {
-            // Execute on the main thread
-            juce::MessageManager::callAsync([this, newValue]() {
-                jsInterop->InvokeMethod("GainUpdate", newValue);
-            });
-        }
+        // Get the APVTS as XML string
+        // Important: execute on the JUCE Message thread
+        juce::MessageManager::callAsync([this]() {
+            juce::String xml = audioParams.copyState().createXml()->toString();
+            jsInterop->InvokeMethod("APVTSUpdate", xml);
+        });
     }
 
     bool keyPressed(const juce::KeyPress &key, juce::Component *originatingComponent) override {
         if (key.getTextCharacter() == 'i') {
             // "I" key is pressed
             // Hide/show inspector window
-            if (inspectorModalWindow.get() == nullptr) {
+            if (inspectorModalWindow == nullptr) {
                 inspectorModalWindow = std::make_unique<InspectorModalWindow>(inspectorView, inspectorImage,
                                                                               JUCE_SCALE);
             } else {
