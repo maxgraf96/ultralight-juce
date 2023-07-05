@@ -122,13 +122,10 @@
 
 </head>
 <body>
-<div class="header">
-    <div>left</div>
-    <div>center</div>
-    <div>right</div>
-</div>
+<h1 style="margin-left: 24px;">ultralight-juce</h1>
 <div style="display: flex; flex-direction: column; justify-content: center; align-items: center">
     <div class="gainContainer">
+        <h3>Gain knob</h3>
         <div id="gain">
             <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="1080" height="1080" viewBox="0 0 1080 1080" xml:space="preserve">
         <g transform="matrix(16.13 -16.13 16.13 16.13 540 540)"  >
@@ -136,19 +133,16 @@
         </g>
         </svg>
         </div>
-        <span>Gain</span>
+        <span>The values of the gain knob are propagated to JUCE and vice-versa.</span>
         <br>
+        <h3>Button</h3>
         <button class="testBtn" onclick="OnMyButtonClick(4, 'xoxo', [2,3,4,5,6])">test</button>
-        <span>This is my button subtext</span>
+        <span>The button invokes a callback in C++.</span>
 
     </div>
     <br>
-    <br>
-    <br>
     <section class="splide" aria-labelledby="carousel-heading">
-        <h2 id="carousel-heading">Basic Slider Example using the Splide library</h2>
-        <br>
-        <br>
+        <h3 id="carousel-heading">Basic Slider Example using the Splide JS library</h3>
         <br>
 
         <div class="splide__track">
