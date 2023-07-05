@@ -29,7 +29,7 @@ The project is based on JUCE and built with CMake. To get up and running, follow
 5. Open `Source/Config.h` and
    1. Set `JS_RESOURCES_PATH` to the path of the `Resources` folder in the project root, e.g. `.../ultralight-juce-main/Resources`
    2. Set `ULTRALIGHT_RESOURCES_PATH` to the path of the `resources` folder in the `Libs/ultralight-sdk/bin` directory, e.g. `.../ultralight-juce-main/Libs/ultralight-sdk/bin/resources`
-6. Copy the `Libs/ultralight-sdk/inspector` folder to the `Resources` folder in the project root, e.g. `.../ultralight-juce-main/Resources
+6. Copy the `Libs/ultralight-sdk/inspector` folder to the `Resources` folder in the project root, e.g. `.../ultralight-juce-main/Resources`
 7. Build the project using CMake in your favourite IDE or via terminal, e.g. by
    1. Make sure you have a CMake generator installed, e.g. [Ninja](https://ninja-build.org/) on macOS or [Visual Studio](https://visualstudio.microsoft.com/) on Windows
    2. Open the terminal and navigate to the project root
