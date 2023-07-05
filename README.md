@@ -1,8 +1,7 @@
-# juce-ultralight 🍊⚡
----
+# ultralight-juce 🍊⚡
 
 ![Screenshot](Screenshot.png)
-This repository contains the source code for the `juce-ultralight` GUI framework.
+This repository contains the source code for the `ultralight-juce` GUI framework.
 This framework integrates the [Ultralight](https://ultralig.ht/) HTML renderer with JUCE, allowing you to embed web content in your JUCE application.
 It enables JUCE components that are designed, rendered and scripted using HTML, CSS and JavaScript.
 I made this framework because I have extensively worked with JUCE, but have found its GUI functionality limiting/tedious at times. HTML/CSS/JS make it easy to create appealing and interactive user interfaces.
@@ -28,9 +27,9 @@ The project is based on JUCE and built with CMake. To get up and running, follow
 3. Download [JUCE](https://juce.com/get-juce/download) and copy the JUCE folder to the root of the project
 4. Download the [Ultralight SDK](https://github.com/ultralight-ux/Ultralight/releases) and copy the `ultralight-sdk` folder to the `Libs` folder (see below for a screenshot of the folder structure)
 5. Open `Source/Config.h` and
-   1. Set `JS_RESOURCES_PATH` to the path of the `Resources` folder in the project root, e.g. `.../juce-ultralight-main/Resources`
-   2. Set `ULTRALIGHT_RESOURCES_PATH` to the path of the `resources` folder in the `Libs/ultralight-sdk/bin` directory, e.g. `.../juce-ultralight-main/Libs/ultralight-sdk/bin/resources`
-6. Copy the `Libs/ultralight-sdk/inspector` folder to the `Resources` folder in the project root, e.g. `.../juce-ultralight-main/Resources
+   1. Set `JS_RESOURCES_PATH` to the path of the `Resources` folder in the project root, e.g. `.../ultralight-juce-main/Resources`
+   2. Set `ULTRALIGHT_RESOURCES_PATH` to the path of the `resources` folder in the `Libs/ultralight-sdk/bin` directory, e.g. `.../ultralight-juce-main/Libs/ultralight-sdk/bin/resources`
+6. Copy the `Libs/ultralight-sdk/inspector` folder to the `Resources` folder in the project root, e.g. `.../ultralight-juce-main/Resources
 7. Build the project using CMake in your favourite IDE or via terminal, e.g. by
    1. Make sure you have a CMake generator installed, e.g. [Ninja](https://ninja-build.org/) on macOS or [Visual Studio](https://visualstudio.microsoft.com/) on Windows
    2. Open the terminal and navigate to the project root
