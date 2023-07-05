@@ -25,6 +25,7 @@
 #include "PluginProcessor.h"
 #include "InspectorModalWindow.h"
 #include "ULHelper.h"
+#include "Config.h"
 
 using namespace ultralight;
 
@@ -86,7 +87,7 @@ public:
         // ================================== MISCELLANEOUS ==================================
         // Add file watcher to watch for changes to index.html and automatically hot-reload the View when
         // files (e.g., HTML, JS, CSS) in the given folder are changed
-        fileWatcher = std::make_unique<FileWatcher>("/Users/max/CLionProjects/ultralight-juce/Resources");
+        fileWatcher = std::make_unique<FileWatcher>(JS_RESOURCES_PATH);
         // Describe which files you want to watch
         fileWatcher->AddCallback("index.html", [this](const std::string &filename) {
             DBG("File changed: " << filename);

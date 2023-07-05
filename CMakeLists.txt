@@ -123,11 +123,11 @@ target_link_libraries(${PROJECT_NAME}
 # Use this command if you want to copy the built VST3 file to a specific directory after each build
 # This makes it quicker to test your plugin in your DAW
 # Set the source file and destination directory
-set(source_file "/Users/max/CLionProjects/ultralight-juce/cmake-build-debug/UltralightJUCE_artefacts/Debug/VST3/UltralightJUCE.vst3")
-set(destination_dir "/Library/Audio/Plug-Ins/VST3")
-add_custom_command(
-        TARGET UltralightJUCE  # Specify your target name
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy "${source_file}" "${destination_dir}/UltralightJUCE.vst3"  # Copy the file, change the filename "UltralightJUCE.vst3" as needed
-        DEPENDS "${source_file}"   # Specify the dependency on the source file
-)
+#set(source_file "/Users/max/CLionProjects/ultralight-juce/cmake-build-debug/UltralightJUCE_artefacts/Debug/VST3/UltralightJUCE.vst3")
+#set(destination_dir "/Library/Audio/Plug-Ins/VST3")
+#add_custom_command(
+#        TARGET UltralightJUCE  # Specify your target name
+#        POST_BUILD
+#        COMMAND ${CMAKE_COMMAND} -E copy "${source_file}" "${destination_dir}/UltralightJUCE.vst3"  # Copy the file, change the filename "UltralightJUCE.vst3" as needed
+#        DEPENDS "${source_file}"   # Specify the dependency on the source file
+#)

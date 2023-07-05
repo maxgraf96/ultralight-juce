@@ -3,10 +3,12 @@
 #ifndef ULTRALIGHTJUCE_PLUGINPROCESSOR_H
 #define ULTRALIGHTJUCE_PLUGINPROCESSOR_H
 
-#include "Ultralight/RefPtr.h"
-#include "Ultralight/Renderer.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <Ultralight/Ultralight.h>
+
+#include "Ultralight/RefPtr.h"
+#include "Ultralight/Renderer.h"
+#include "Config.h"
 
 //==============================================================================
 class AudioPluginAudioProcessor  :
@@ -52,7 +54,6 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState parameters;
-//    ultralight::RefPtr<ultralight::Renderer> renderer;
 
 
 private:

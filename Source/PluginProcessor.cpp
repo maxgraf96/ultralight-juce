@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "Config.h"
 #include "PluginEditor.h"
 #include "Ultralight/Renderer.h"
 
@@ -210,7 +211,7 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 
     // We need to tell config where our resources are so it can load our bundled SSL certificates to make HTTPS requests.
     // For shipping, this needs to be tied to JUCE Binary files or a custom resource directory
-    config.resource_path = "/Users/max/CLionProjects/ultralight-juce/Libs/ultralight-sdk/bin/resources";
+    config.resource_path = ULTRALIGHT_RESOURCES_PATH;
     // The GPU renderer should be disabled to render Views to a pixel-buffer (Surface).
     config.use_gpu_renderer = false;
     // You can set a custom DPI scale here. Default is 1.0 (100%)
@@ -224,7 +225,7 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
     // Use the OS's native file loader, with a base directory
     // All file:// URLs will load relative to this base directory.
     // For shipping, this needs to be tied to JUCE Binary files or a custom resource directory
-    Platform::instance().set_file_system(GetPlatformFileSystem("/Users/max/CLionProjects/ultralight-juce/Resources"));
+    Platform::instance().set_file_system(GetPlatformFileSystem(JS_RESOURCES_PATH.c_str()));
     // Use the default logger (writes to a log file)
     Platform::instance().set_logger(GetDefaultLogger("ultralight.log"));
 
