@@ -18,6 +18,9 @@
 #include "Ultralight/RefPtr.h"
 #include "JavaScriptCore/JavaScriptCore.h"
 
+/// \brief Base class for all JS interoperation. This class is used to invoke JS methods from C++ and vice versa.
+/// You can extend this class to add your own JS interoperation. An example of how to subclass it is given in
+/// JSInteropExample.h.
 class JSInteropBase :
         public ultralight::LoadListener
         {
@@ -27,69 +30,114 @@ public:
     {
     }
 
+    /// \brief Core function. This function is called by Ultralight once the DOM has been loaded. This implementation
+    /// sets up automatic callbacks for JUCE AudioProcessorValueTreeState (APVTS) changes in JS.
+    void OnDOMReady(ultralight::View* caller,
+                    uint64_t frame_id,
+                    bool is_main_frame,
+                    const ultralight::String& url) override {
+        // Get JS context
+        ultralight::Ref<ultralight::JSContext> context = view.LockJSContext();
+        JSContextRef ctx = context.get();
+        // Register this class (JSInterop) as a global object in JavaScript
+        JSObjectRef globalObj = JSContextGetGlobalObject(ctx);
+        JSStringRef name = JSStringCreateWithUTF8CString("JSInterop");
+        // We need to create our custom JS class definition here in order to use JSObjectSetPrivate
+        // Default JS classes don't allow us to set a private instance pointer
+        JSClassDefinition classDef = kJSClassDefinitionEmpty;
+        classDef.callAsConstructor = nullptr; // Set to NULL for simplicity
+        JSClassRef classRef = JSClassCreate(&classDef);
+        JSObjectRef jsObj = JSObjectMake(ctx, classRef, nullptr);
+        // Key point: Set the instance pointer as the private data of the JS object
+        // This means that we can access the instance pointer and thereby member variables from the callback
+        auto success = JSObjectSetPrivate(jsObj, this);
+        // Add the class reference to the global JS object ("window")
+        JSObjectSetProperty(ctx, globalObj, name, jsObj, 0, nullptr);
+        JSClassRelease(classRef);
+
+        // Register APVTS parameter update callback
+        registerCppFunctionInJS("OnParameterUpdate", OnParameterUpdate);
+
+        // === JUCE APVTS PARAMS ===
+        // Propagate all parameters that were loaded from disk to JS
+        for(auto param : audioParams.processor.getParameters()) {
+            // Check if parameter is a float parameter
+            if(auto* floatParam = dynamic_cast<juce::AudioParameterFloat*>(param)) {
+                parent.parameterChanged(floatParam->getParameterID(), floatParam->get());
+            }
+            // TODO Add other parameter types
+        }
+    }
+
+    /// \brief APVTS parameter propagation to JS. See how it is handled in Resources/script.js.
+    static JSValueRef OnParameterUpdate(JSContextRef ctx, JSObjectRef function,
+                                        JSObjectRef thisObject, size_t argumentCount,
+                                        const JSValueRef arguments[], JSValueRef* exception) {
+        // Get the class instance pointer from the JS object
+        auto* instance = GetInstance(ctx);
+
+        // Get the parameter ID
+        auto parameterID = JSValueToStringCopy(ctx, arguments[0], nullptr);
+        // Allocate a char* of length JSStringGetLength(parameterID)
+        char* parameterIDStr = new char[JSStringGetLength(parameterID)];
+        JSStringGetUTF8CString(parameterID, parameterIDStr, JSStringGetLength(parameterID));
+
+        // Get the parameter value
+        auto newValue = JSValueToNumber(ctx, arguments[1], nullptr);
+
+        // Update the parameter value in JUCE
+        instance->audioParams.getParameter(parameterIDStr)->setValueNotifyingHost(static_cast<float>(newValue));
+
+        JSStringRelease(parameterID);
+        delete[] parameterIDStr;
+        return JSValueMakeNull(ctx);
+    }
+
     // ========================================================================================================
     // C++ -> JS
     // ========================================================================================================
-    template<typename T>
-    void InvokeMethod(const juce::String& methodName, const T& value) {
+    template<typename... T>
+    void invokeMethod(const juce::String& methodName, const T&... value) {
+        // Get the JSContext from the View
         ultralight::Ref<ultralight::JSContext> context = view.LockJSContext();
         JSContextRef ctx = context.get();
 
+        // Create a JSStringRef from the methodName and evaluate it
         JSRetainPtr<JSStringRef> methodNameSTR = adopt(JSStringCreateWithUTF8CString(methodName.toRawUTF8()));
         JSValueRef func = JSEvaluateScript(ctx, methodNameSTR.get(), nullptr, nullptr, 0, nullptr);
 
+        // Check if the function is valid
         if (JSValueIsObject(ctx, func)) {
             JSObjectRef funcObj = JSValueToObject(ctx, func, nullptr);
             if (funcObj && JSObjectIsFunction(ctx, funcObj)) {
-                JSValueRef argVal = CreateJSValue(ctx, value);
-                JSValueRef args[] = { argVal };
-                size_t num_args = 1;
+                // Valid function, call it with the given arguments
+                // Check how many arguments we have
+                constexpr std::size_t argCount = std::tuple_size<std::tuple<const T&...>>::value;
+
+                JSValueRef args[] = { CreateJSValue(ctx, value)... };
+                size_t num_args = argCount;
                 JSValueRef exception = nullptr;
                 JSValueRef result = JSObjectCallAsFunction(ctx, funcObj, nullptr, num_args, args, &exception);
                 if (exception) {
                     // Handle any exceptions thrown from function here.
-                    DBG("JSInterop::InvokeMethod: " + methodName + " threw an exception on the JS side. Double check that the data you are passing is correct and that the JS function is valid.");
+                    DBG("JSInterop::invokeMethod: " + methodName + " threw an exception on the JS side. Double check that the data you are passing is correct and that the JS function is valid.");
                 }
                 if (result) {
                     // Handle result (if any) here.
                 }
             }
         } else {
-            DBG("JSInterop::InvokeMethod: " + methodName + " is not a valid JS function or threw an exception.");
+            DBG("JSInterop::invokeMethod: " + methodName + " is not a valid JS function or threw an exception.");
         }
     }
 
     // ========================================================================================================
     // JS -> C++
     // ========================================================================================================
-    /// \brief Registers a C++ function with the JS of the view. Functions registered with this method can be called
-    /// from JS and will produce a callback in C++.
-    /// \param functionName
-    /// \param callbackFunction
-    void registerCppFunctionInJS(const juce::String& functionName, JSObjectCallAsFunctionCallback callbackFunction) {
-        // Get JS context
-        ultralight::Ref<ultralight::JSContext> context = view.LockJSContext();
-        JSContextRef ctx = context.get();
-        // Create a JavaScript String containing the name of our callback.
-        JSStringRef name = JSStringCreateWithUTF8CString(functionName.toRawUTF8());
-        // Create a garbage-collected JavaScript function that is bound to our native C callback 'callbackFunction'.
-        JSObjectRef func = JSObjectMakeFunctionWithCallback(ctx, name, callbackFunction);
-        // Get the global JavaScript object (aka 'window')
-        JSObjectRef globalObj = JSContextGetGlobalObject(ctx);
-        // Store our function in the page's global JavaScript object so that it accessible from the page as '{callbackFunction}()'.
-        JSObjectSetProperty(ctx, globalObj, name, func, 0, 0);
-        // Release the JavaScript String we created earlier.
-        JSStringRelease(name);
-    }
-
-    template <typename... Args>
-    static void printTupleTypes(const std::tuple<Args...>& tuple)
-    {
-        std::apply([](const auto&... args) {
-            ((std::cout << typeid(args).name() << std::endl), ...);
-        }, tuple);
-    }
-
+    /// \brief Registers a C++ lambda or function object with the JS of the view. Functions registered with this method
+    /// can be called from JS and will produce a callback in C++.
+    /// \param functionName The name of the function as it will be called from JS
+    /// \param callbackFunction The C++ function that will be called when the JS function is called. Accepts lambdas.
     template<typename... T>
     void registerCppCallbackInJS(const juce::String& functionName, std::function<void(T...)> callbackFunction) {
         // Get JS context
@@ -138,80 +186,24 @@ public:
         JSStringRelease(name);
     }
 
-    void OnDOMReady(ultralight::View* caller,
-                            uint64_t frame_id,
-                            bool is_main_frame,
-                            const ultralight::String& url) override {
+    /// \brief Registers a C++ function with the JS of the view. Functions registered with this method can be called
+    /// from JS and will produce a callback in C++.
+    /// \param functionName The name of the function as it will be called from JS
+    /// \param callbackFunction The C++ function that will be called when the JS function is called
+    void registerCppFunctionInJS(const juce::String& functionName, JSObjectCallAsFunctionCallback callbackFunction) {
         // Get JS context
         ultralight::Ref<ultralight::JSContext> context = view.LockJSContext();
         JSContextRef ctx = context.get();
-        // Register this class (JSInterop) as a global object in JavaScript
+        // Create a JavaScript String containing the name of our callback.
+        JSStringRef name = JSStringCreateWithUTF8CString(functionName.toRawUTF8());
+        // Create a garbage-collected JavaScript function that is bound to our native C callback 'callbackFunction'.
+        JSObjectRef func = JSObjectMakeFunctionWithCallback(ctx, name, callbackFunction);
+        // Get the global JavaScript object (aka 'window')
         JSObjectRef globalObj = JSContextGetGlobalObject(ctx);
-        JSStringRef name = JSStringCreateWithUTF8CString("JSInterop");
-        // We need to create our custom JS class definition here in order to use JSObjectSetPrivate
-        // Default JS classes don't allow us to set a private instance pointer
-        JSClassDefinition classDef = kJSClassDefinitionEmpty;
-        classDef.callAsConstructor = nullptr; // Set to NULL for simplicity
-        JSClassRef classRef = JSClassCreate(&classDef);
-        JSObjectRef jsObj = JSObjectMake(ctx, classRef, nullptr);
-        // Key point: Set the instance pointer as the private data of the JS object
-        // This means that we can access the instance pointer and thereby member variables from the callback
-        auto success = JSObjectSetPrivate(jsObj, this);
-        // Add the class reference to the global JS object ("window")
-        JSObjectSetProperty(ctx, globalObj, name, jsObj, 0, nullptr);
-        JSClassRelease(classRef);
-
-        // Register APVTS parameter update callback
-        registerCppFunctionInJS("OnParameterUpdate", OnParameterUpdate);
-
-        // ================================== JUCE APVTS PARAMS ==================================
-        // Propagate all parameters that were loaded from disk to JS
-        for(auto param : audioParams.processor.getParameters()) {
-            // Check if parameter is a float parameter
-            if(auto* floatParam = dynamic_cast<juce::AudioParameterFloat*>(param)) {
-                parent.parameterChanged(floatParam->getParameterID(), floatParam->get());
-            }
-            // TODO Add other parameter types
-        }
-    }
-
-    /// \brief Gets the instance pointer from the JS object
-    static JSInteropBase* GetInstance(JSContextRef ctx) {
-        JSObjectRef globalObj = JSContextGetGlobalObject(ctx);
-        JSStringRef name = JSStringCreateWithUTF8CString("JSInterop");
-        JSValueRef jsObj = JSObjectGetProperty(ctx, globalObj, name, nullptr);
-        auto jsInteropJSObjRef = JSValueToObject(ctx, jsObj, nullptr);
+        // Store our function in the page's global JavaScript object so that it accessible from the page as '{callbackFunction}()'.
+        JSObjectSetProperty(ctx, globalObj, name, func, 0, 0);
+        // Release the JavaScript String we created earlier.
         JSStringRelease(name);
-        auto* instance = static_cast<JSInteropBase*>(JSObjectGetPrivate(jsInteropJSObjRef));
-
-        if(instance == nullptr) {
-            DBG("JSInterop::GetInstance: Failed to get instance.");
-            return nullptr;
-        }
-        return instance;
-    }
-
-    static JSValueRef OnParameterUpdate(JSContextRef ctx, JSObjectRef function,
-                                   JSObjectRef thisObject, size_t argumentCount,
-                                   const JSValueRef arguments[], JSValueRef* exception) {
-        // Get the class instance pointer from the JS object
-        auto* instance = GetInstance(ctx);
-
-        // Get the parameter ID
-        auto parameterID = JSValueToStringCopy(ctx, arguments[0], nullptr);
-        // Allocate a char* of length JSStringGetLength(parameterID)
-        char* parameterIDStr = new char[JSStringGetLength(parameterID)];
-        JSStringGetUTF8CString(parameterID, parameterIDStr, JSStringGetLength(parameterID));
-
-        // Get the parameter value
-        auto newValue = JSValueToNumber(ctx, arguments[1], nullptr);
-
-        // Update the parameter value in JUCE
-        instance->audioParams.getParameter(parameterIDStr)->setValueNotifyingHost(static_cast<float>(newValue));
-
-        JSStringRelease(parameterID);
-        delete[] parameterIDStr;
-        return JSValueMakeNull(ctx);
     }
 
     // ================================== HELPER FUNCTIONS ==================================
@@ -245,6 +237,22 @@ public:
     JSValueRef CreateJSValue(JSContextRef ctx, const juce::String& value) {
         return JSValueMakeString(ctx, JSStringCreateWithUTF8CString(value.toRawUTF8()));
     }
+
+    // Lists/Arrays (using std::vectors)
+    template<typename T>
+    JSValueRef CreateJSValue(JSContextRef ctx, const std::vector<T>& value) {
+        auto* jsValues = new JSValueRef[value.size()];
+        for(int i = 0; i < value.size(); i++) {
+            jsValues[i] = CreateJSValue(ctx, value[i]);
+        }
+        JSValueRef jsArray = JSObjectMakeArray(ctx, value.size(), jsValues, nullptr);
+        delete[] jsValues;
+        return jsArray;
+    }
+
+
+    //==============================================================================
+
 
     // JS -> C++
     // Helper function to convert different types of JSValueRef to C++ types
@@ -283,9 +291,7 @@ public:
         return string;
     }
 
-    // ====================================================================
-    // Lists
-    // ====================================================================
+    // Lists/Arrays (using std::vectors)
     template<>
     static std::vector<juce::String> GetJSValue<std::vector<juce::String>>(JSContextRef ctx, JSValueRef value) {
         return GetJSValueList<juce::String>(ctx, value);
@@ -308,7 +314,10 @@ public:
         std::vector<T> list;
         JSObjectRef jsArray = JSValueToObject(ctx, value, nullptr);
         if (jsArray != nullptr) {
-            size_t length = JSValueToNumber(ctx, JSObjectGetProperty(ctx, jsArray, JSStringCreateWithUTF8CString("length"), nullptr), nullptr);
+            auto length = static_cast<size_t>(JSValueToNumber(ctx, JSObjectGetProperty(ctx, jsArray,
+                                                                                         JSStringCreateWithUTF8CString(
+                                                                                                 "length"), nullptr),
+                                                                nullptr));
             for (size_t i = 0; i < length; ++i) {
                 JSValueRef jsValue = JSObjectGetPropertyAtIndex(ctx, jsArray, static_cast<uint32_t>(i), nullptr);
                 list.push_back(GetJSValue<T>(ctx, jsValue));
@@ -341,6 +350,22 @@ public:
         std::get<Index>(tuple) = value;
 
         return GetConvertedArgumentsHelper<Index + 1, Args...>(ctx, arguments, argumentCount, tuple);
+    }
+
+    /// \brief Gets the instance pointer from the JS object
+    static JSInteropBase* GetInstance(JSContextRef ctx) {
+        JSObjectRef globalObj = JSContextGetGlobalObject(ctx);
+        JSStringRef name = JSStringCreateWithUTF8CString("JSInterop");
+        JSValueRef jsObj = JSObjectGetProperty(ctx, globalObj, name, nullptr);
+        auto jsInteropJSObjRef = JSValueToObject(ctx, jsObj, nullptr);
+        JSStringRelease(name);
+        auto* instance = static_cast<JSInteropBase*>(JSObjectGetPrivate(jsInteropJSObjRef));
+
+        if(instance == nullptr) {
+            DBG("JSInterop::GetInstance: Failed to get instance.");
+            return nullptr;
+        }
+        return instance;
     }
 
     // ================================== FIELDS ==================================

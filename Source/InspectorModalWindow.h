@@ -3,16 +3,19 @@
 //
 #pragma once
 
-#include "Ultralight/KeyEvent.h"
-#include "Ultralight/String.h"
-#include <codecvt>
+#include "ULHelper.h"
 #ifndef ULTRALIGHTJUCE_INSPECTORMODALWINDOW_H
 #define ULTRALIGHTJUCE_INSPECTORMODALWINDOW_H
 
+#include <codecvt>
 #include <string>
 #include <regex>
 #include <JuceHeader.h>
 #include <Ultralight/Ultralight.h>
+
+#include "Ultralight/KeyEvent.h"
+#include "Ultralight/String.h"
+#include "GUIMainComponent.h"
 
 class ImageComponent : public juce::Component
 {
@@ -24,6 +27,7 @@ public:
         setSize(inspectorView->width(), inspectorView->height());
     }
 
+    // Same as in GUIMainComponent.h, see there for more details
     void paint(juce::Graphics& g) override
     {
         AudioPluginAudioProcessor::RENDERER->Update();
@@ -42,7 +46,7 @@ public:
             uint32_t height = bitmap->height();
             uint32_t stride = bitmap->row_bytes();
             // Copy the raw pixels into a JUCE Image.
-            image = CopyPixelsToTexture(pixels, width, height, stride);
+            image = ULHelper::CopyPixelsToTexture(pixels, width, height, stride);
             bitmap->UnlockPixels();
             // Clear the dirty bounds.
             surface->ClearDirtyBounds();
@@ -53,33 +57,6 @@ public:
                     0, 0, getWidth(), getHeight(),
                     0, 0, static_cast<int>(getWidth() * JUCE_SCALE), static_cast<int>(getHeight() * JUCE_SCALE));
 
-    }
-
-    static juce::Image CopyPixelsToTexture(
-            void *pixels,
-            uint32_t width,
-            uint32_t height,
-            uint32_t stride) {
-        juce::Image image(juce::Image::ARGB, static_cast<int>(width), static_cast<int>(height), false);
-        juce::Image::BitmapData bitmapData(image, 0, 0, static_cast<int>(width), static_cast<int>(height),
-                                           juce::Image::BitmapData::writeOnly);
-        bitmapData.pixelFormat = juce::Image::ARGB;
-
-        // Normal case: the stride is the same as the width * 4 (4 bytes per pixel)
-        // In this case, we can just memcpy the image
-        if (width * 4 == stride){
-            std::memcpy(bitmapData.data, pixels, stride * height);
-        }
-            // Special case: the stride is different from the width * 4
-            // In this case, we need to copy the image line by line
-            // The reason for this special case is that in some cases, the stride is not the same as the width * 4,
-            // for example when the JUCE window width is uneven (e.g. 1001px)
-        else{
-            for (uint32_t y = 0; y < height; ++y)
-                std::memcpy(bitmapData.getLinePointer(static_cast<int>(y)), static_cast<uint8_t *>(pixels) + y * stride, width * 4);
-        }
-
-        return image;
     }
 
     void mouseMove(const juce::MouseEvent& event) override

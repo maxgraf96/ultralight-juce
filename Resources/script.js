@@ -1,8 +1,18 @@
+// This file contains the JS code for the plugin UI. It is loaded by the index.html file in the Resources folder.
+// You can add more JS files and load them in the index.html file as needed.
+// Here we are using vanilla JS to show how to use it with JUCE, but you can use any JS framework of your choice.
+// This file also shows how we use Ultralight to send messages to JUCE and receive messages from JUCE.
+
+// ========================================================================================================
+// Interacting with JUCE
+// ========================================================================================================
+
+// Dom parser to parse the APVTS XML string from JUCE
 const parser = new DOMParser();
-let APVTS = null;
 
 /**
- * Called by JUCE whenever there is a change in the APVTS parameters
+ * Called by JUCE whenever there is a change in the APVTS parameters, for the call see parameterChanged() method in
+ * GUIMainComponent.h.
  * @param xml The XML string containing the APVTS parameters. You can parse this and update your UI accordingly as below,
  * or write some more advanced logic to do more complex state management for your UI elements.
  * @constructor
@@ -18,11 +28,11 @@ function APVTSUpdate(xml) {
         const id = paramElement.getAttribute("id");
         const value = paramElement.getAttribute("value");
 
-        // Match all relevant ids from the APVTS XML to their UI elements
+        // Match all relevant ids (the ones you want to handle in this script) from the APVTS XML to their UI elements.
         switch (id) {
             case "gain":
                 // Call the GainUpdate function with the value
-                GainUpdate(value);
+                gainUpdate(value);
                 break;
             // Add more cases for other relevant ids and their corresponding UI elements
             // case "otherId":
@@ -35,7 +45,27 @@ function APVTSUpdate(xml) {
     }
 }
 
-function GainUpdate(value){
+/**
+ * Dummy function to show how to call a JS function from JUCE, see JSInteropExample.h.
+ */
+function myJSFunction(...args) {
+    console.log("myJSFunction called with arguments: ");
+    for (let i = 0; i < args.length; i++) {
+        console.log("Argument " + (i + 1) + ": " + args[i]);
+    }
+    console.log();
+}
+
+// ========================================================================================================
+// UI related code
+// ========================================================================================================
+
+/**
+ * Update the Gain knob UI
+ * @param value
+ * @constructor
+ */
+function gainUpdate(value){
     // Rotate the gain knob
     // Map value from 0-1 to -145 to 145
     value = value * 290 - 145;
@@ -92,5 +122,4 @@ window.addEventListener('DOMContentLoaded', (event) => {
         // Remove dragging class from the knob
         knob.classList.remove('dragging');
     });
-
 });

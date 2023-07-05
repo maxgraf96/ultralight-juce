@@ -15,6 +15,7 @@
 // to the JSInteropBase class. Both have their advantages and disadvantages. Extending the JSInteropBase class
 // will produce more code, but also keep your components more modular. Adding all your functions to the JSInteropBase
 // class will lead to one big file, which might make it harder to navigate.
+// You can have multiple instances of the JSInteropXXX classes for several Views, but afaik not for the same View.
 class JSInteropExample : public JSInteropBase {
 public:
     JSInteropExample(ultralight::View& inView, juce::AudioProcessorValueTreeState& params, juce::AudioProcessorValueTreeState::Listener& parentComponent)
@@ -30,6 +31,10 @@ public:
         // ========================================================================================================
         JSInteropBase::OnDOMReady(caller, frame_id, is_main_frame, url);
 
+        // ========================================================================================================
+        // JS callbacks in C++. These need to be defined in the OnDOMReady() method, or anywhere else AFTER the DOM
+        // is loaded. If you try to define them before the DOM is ready, they will not be registered in JS.
+        // ========================================================================================================
         // Then, register all your custom functions that are NOT APVTS updates here.
         // E.g., a button click with two arguments:
         // 1) Define callback function
@@ -37,8 +42,8 @@ public:
             DBG("Button clicked! Received argument: " << argument << " and argument2: " << argument2);
             DBG("Argument3 is a vector of size: " << argument3.size());
             DBG("Items in argument3: ");
-            for (int i = 0; i < argument3.size(); i++) {
-                DBG(argument3[i]);
+            for (int element : argument3) {
+                DBG(element);
             }
             // Do something with the arguments
             // ...
@@ -46,6 +51,19 @@ public:
         // 2) Register callback function in JS - now call OnMyButtonClick(int, String) from anywhere in your
         // View's JS
         registerCppCallbackInJS("OnMyButtonClick", buttonClickCallback);
+
+        // ========================================================================================================
+        // Passing data from C++ to JS. These can be called from anywhere in your C++ code, after the DOM is ready.
+        // ========================================================================================================
+        // Primitive types
+        invokeMethod("myJSFunction", 2, 3);
+        // Strings
+        invokeMethod("myJSFunction", juce::String("Hello"), juce::String("World"));
+        // Arrays
+        std::vector<int> myVector = {1, 2, 3, 4, 5};
+        invokeMethod("myJSFunction", myVector);
+        // Mix
+        invokeMethod("myJSFunction", 2, juce::String("Hello"), myVector);
     }
 
 };

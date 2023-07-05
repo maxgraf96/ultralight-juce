@@ -8,6 +8,7 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
 ), parameters (*this, nullptr, "PARAMETERS", {
+    // Add your audio parameters here...
         std::make_unique<juce::AudioParameterFloat>("gain", "Gain", 0.0f, 1.0f, 0.5f)
 })
 {
@@ -31,8 +32,6 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                               juce::MidiBuffer& midiMessages)
 {
     juce::ignoreUnused (midiMessages);
-
-    buffer.clear();
 
     // Get the current value of the "gain" parameter
     float gain = *parameters.getRawParameterValue("gain");
@@ -177,9 +176,6 @@ juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 void AudioPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     // Save the APVTS state to persist parameter values
-//    juce::MemoryOutputStream stream(destData, false);
-//    parameters.state.writeToStream(stream);
-
     juce::ValueTree state = parameters.copyState();
     std::unique_ptr<juce::XmlElement> xml = state.createXml();
     copyXmlToBinary(*xml, destData);
@@ -201,9 +197,9 @@ void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeI
 // HYPERIMPORTANT: Since Ultralight has a hard constraint on the thread that first creates and then calls the
 // renderer, we store it globally (this is shared between all instances of the plugin)
 // The docs say to have one renderer per application
-// In DAW-land, application == DAW, application != plugin -> we have one renderer per DAW!!!!!!!
-// It follows that we have to use this particular instance and NEVER create a new one
-// Doing so will invalidate the first one and cause a crash
+// In DAW-land, application == DAW, application != plugin -> we have one renderer per DAW!
+// It follows that we have to use this particular instance for all our plugin instances and NEVER create a new one
+// Doing so will invalidate the first one and cause a crash.
 ultralight::RefPtr<ultralight::Renderer> AudioPluginAudioProcessor::RENDERER = nullptr;
 
 // This creates new instances of the plugin
@@ -213,6 +209,7 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
     Config config;
 
     // We need to tell config where our resources are so it can load our bundled SSL certificates to make HTTPS requests.
+    // For shipping, this needs to be tied to JUCE Binary files or a custom resource directory
     config.resource_path = "/Users/max/CLionProjects/ultralight-juce/Libs/ultralight-sdk/bin/resources";
     // The GPU renderer should be disabled to render Views to a pixel-buffer (Surface).
     config.use_gpu_renderer = false;

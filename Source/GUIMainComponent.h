@@ -20,15 +20,17 @@
 #include "JSInteropBase.h"
 #include "JSInteropExample.h"
 #include "JavaScriptCore/JavaScriptCore.h"
+#include "ULHelper.h"
 #include "Ultralight/RefPtr.h"
 #include "PluginProcessor.h"
 #include "InspectorModalWindow.h"
+#include "ULHelper.h"
 
 using namespace ultralight;
 
+// Initial main window size
 static int WIDTH = 1024;
 static int HEIGHT = 700;
-static int INSPECTOR_Y_OFFSET = 500;
 
 class GUIMainComponent :
         public juce::Component,
@@ -38,59 +40,85 @@ class GUIMainComponent :
         public ultralight::LoadListener {
 public:
     GUIMainComponent(juce::AudioProcessorValueTreeState &params) : audioParams(params) {
-        // ================================== JUCE ==================================
+        // ================================== JUCE ========================================
         // Set component size
         setSize(WIDTH, HEIGHT);
 
         // Listen to APVTS changes
         audioParams.addParameterListener("gain", this);
 
+        // Get the scale parameter of the main monitor.
+        // If you use multiple screens with different DPIs, you need to handle the scaling transitions.
         auto scale = juce::Desktop::getInstance().getDisplays().displays[0].scale;
         JUCE_SCALE = scale;
         DBG("Current monitor scale: " << scale);
 
         // ================================== ULTRALIGHT ==================================
         // Create an HTML view that is WIDTH x HEIGHT
-        view = AudioPluginAudioProcessor::RENDERER->CreateView(WIDTH * JUCE_SCALE, HEIGHT * JUCE_SCALE, true, nullptr);
+        // 1) JUCE handles scaling itself, Ultralight doesn't. So we need to scale our Views by the monitor scale.
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        // 2) VERY IMPORTANT: The third parameter of CreateView() is set to true, which means that the background
+        // of the View will be transparent. This allows you to overlay the View on top of other JUCE components.
+        // If you want an opaque background, set this to false.
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        view = AudioPluginAudioProcessor::RENDERER->CreateView(
+                static_cast<uint32_t>(WIDTH * JUCE_SCALE),
+                static_cast<uint32_t>(HEIGHT * JUCE_SCALE),
+                true, // Transparent background
+                nullptr);
+        // Create JS inspector View
         inspectorView = view->inspector();
-        inspectorView->Resize(WIDTH * JUCE_SCALE, 500);
+        inspectorView->Resize(static_cast<uint32_t>(WIDTH * JUCE_SCALE), 500);
 
-        // Set up JS interop for view
+        // Set up JS interop for main View
         jsInterop = std::make_unique<JSInteropExample>(*view, audioParams, *this);
         // Tell ultralight that for this view, we want to use this JSInteropExample instance to handle the interop
+        // Look into JSInteropExample.h for more info on JS interop
         view->set_load_listener(jsInterop.get());
 
-        // Load html file from URL - relative to resources folder set in PluginProcessor.cpp createPluginFilter() method
+        // Load HTML file from URL - this URL is relative to the resources folder set in
+        // the createPluginFilter() method in PluginProcessor.cpp
         view->LoadURL("file:///index.html");
 
         // Notify the View it has input focus (updates appearance)
         view->Focus();
-        inspectorView->Focus();
 
         // ================================== MISCELLANEOUS ==================================
-        // Add file watcher to watch for changes to index.html and reload the view
+        // Add file watcher to watch for changes to index.html and automatically hot-reload the View when
+        // files (e.g., HTML, JS, CSS) in the given folder are changed
         fileWatcher = std::make_unique<FileWatcher>("/Users/max/CLionProjects/ultralight-juce/Resources");
+        // Describe which files you want to watch
         fileWatcher->AddCallback("index.html", [this](const std::string &filename) {
             DBG("File changed: " << filename);
+            // Adding a filename to this queue will enable hot-reloading when the file is changed
             fileWatcherQueue.enqueue(filename);
         });
         fileWatcher->AddCallback("script.js", [this](const std::string &filename) {
             DBG("File changed: " << filename);
             fileWatcherQueue.enqueue(filename);
         });
+        // Start watching the files
         fileWatcher->Start();
 
         // Listen to keyboard presses
         addKeyListener(this);
+        // Allows this window to receive keyboard presses
         setWantsKeyboardFocus(true);
 
         // Start timer to periodically redraw GUI
         startTimerHz(60);
     }
 
+    /// \brief Paint method called by JUCE
+    /// \param g JUCE Graphics context
+    /// Here we draw all our JUCE components and Ultralight views
     void paint(juce::Graphics &g) override {
         g.fillAll(juce::Colours::black);
 
+        // ================================== JUCE ========================================
+        // This is where you can draw all your juce components (this project currently uses only Ultralight Views)
+
+        // ================================== ULTRALIGHT ==================================
         std::string out;
         while (fileWatcherQueue.try_dequeue(out)) {
             // TODO: If multiple views, keep a map of files and their views
@@ -109,14 +137,14 @@ public:
             // Get the pixel-buffer Surface for a View.
             RefPtr<Bitmap> bitmap = surface->bitmap();
             // Lock the Bitmap to retrieve the raw pixels.
-            // The format is BGRA, 8-bpp, premultiplied alpha.
+            // The format is ARGB, 4-bpp, premultiplied alpha.
             void *pixels = bitmap->LockPixels();
             // Get the bitmap dimensions.
             uint32_t width = bitmap->width();
             uint32_t height = bitmap->height();
             uint32_t stride = bitmap->row_bytes();
             // Copy the raw pixels into a JUCE Image.
-            image = CopyPixelsToTexture(pixels, width, height, stride);
+            image = ULHelper::CopyPixelsToTexture(pixels, width, height, stride);
 
             // Spawn inspector if it doesn't exist
             if (inspectorModalWindow == nullptr) {
@@ -129,7 +157,6 @@ public:
             // Unlock the Bitmap and mark the Surface as clean.
             bitmap->UnlockPixels();
             surface->ClearDirtyBounds();
-//            DBG("JUCE WIDTH: " << WIDTH << " HEIGHT: " << HEIGHT << " IMAGE WIDTH: " << (int) width << " HEIGHT: " << (int) height << " STRIDE: " << (int) stride);
         }
 
         // Draw the image we just got from Ultralight to the screen.
@@ -138,11 +165,20 @@ public:
                     0, 0, static_cast<int>(WIDTH * JUCE_SCALE), static_cast<int>(HEIGHT * JUCE_SCALE));
     }
 
+    /// \brief Called when the JUCE window is resized.
     void resized() override {
+        // Resize the Component to the new size of the window.
         setSize(getParentWidth(), getParentHeight());
 
-        // Resize the View to the new size of the window.
+        // ================================== JUCE ========================================
+        // This is where you would handle the layout of all your JUCE components
+        // (this project currently uses only Ultralight Views)
+
+
+        // ================================== ULTRALIGHT ==================================
+        // Resize the Ultralight View to the new size of the window (if it exists).
         if (view.get()) {
+            // Update our window sizes
             WIDTH = getParentWidth();
             HEIGHT = getParentHeight();
             view->Resize(static_cast<uint32_t>(WIDTH * JUCE_SCALE), static_cast<uint32_t>(HEIGHT * JUCE_SCALE));
@@ -152,7 +188,7 @@ public:
 
     // ================================== Mouse events ==================================
     void mouseMove(const juce::MouseEvent &event) override {
-        DBG("Mouse moved: " << event.x << ", " << event.y);
+//        DBG("Mouse moved: " << event.x << ", " << event.y);
         MouseEvent evt{};
         evt.type = MouseEvent::kType_MouseMoved;
         evt.x = event.x;
@@ -174,7 +210,7 @@ public:
     }
 
     void mouseDrag(const juce::MouseEvent &event) override {
-        DBG("Mouse drag: " << event.x << ", " << event.y);
+//        DBG("Mouse drag: " << event.x << ", " << event.y);
         MouseEvent evt{};
         evt.type = MouseEvent::kType_MouseMoved;
         evt.x = event.x;
@@ -195,33 +231,8 @@ public:
         repaint();
     }
 
-    static juce::Image CopyPixelsToTexture(
-            void *pixels,
-            uint32_t width,
-            uint32_t height,
-            uint32_t stride) {
-        juce::Image image(juce::Image::ARGB, static_cast<int>(width), static_cast<int>(height), false);
-        juce::Image::BitmapData bitmapData(image, 0, 0, static_cast<int>(width), static_cast<int>(height),
-                                           juce::Image::BitmapData::writeOnly);
-        bitmapData.pixelFormat = juce::Image::ARGB;
-
-        // Normal case: the stride is the same as the width * 4 (4 bytes per pixel)
-        // In this case, we can just memcpy the image
-        if (width * 4 == stride){
-            std::memcpy(bitmapData.data, pixels, stride * height);
-        }
-        // Special case: the stride is different from the width * 4
-        // In this case, we need to copy the image line by line
-        // The reason for this special case is that in some cases, the stride is not the same as the width * 4,
-        // for example when the JUCE window width is uneven (e.g. 1001px)
-        else{
-            for (uint32_t y = 0; y < height; ++y)
-                std::memcpy(bitmapData.getLinePointer(static_cast<int>(y)), static_cast<uint8_t *>(pixels) + y * stride, width * 4);
-        }
-
-        return image;
-    }
-
+    /// \brief JUCE Timer callback
+    /// We use it to periodically repaint the window and the inspector window if it is open
     void timerCallback() override {
         repaint();
         if (inspectorModalWindow != nullptr && inspectorModalWindow->isActiveWindow()) {
@@ -229,6 +240,12 @@ public:
         }
     }
 
+    /// \brief JUCE AudioProcessorValueTreeState::Listener callback
+    /// \param parameterID The ID of the parameter that changed
+    /// \param newValue The new value of the parameter
+    /// We use it to send the APVTS as XML string to the JS side. That way we don't have to deal with individual
+    /// parameters in JS, but can just use the APVTS XML and let JS decide which parameters it wants to use.
+    /// Change this method if you want to send individual parameters to JS.
     void parameterChanged(const juce::String &parameterID, float newValue) override {
         if (!view.get())
             return;
@@ -237,10 +254,11 @@ public:
         // Important: execute on the JUCE Message thread
         juce::MessageManager::callAsync([this]() {
             juce::String xml = audioParams.copyState().createXml()->toString();
-            jsInterop->InvokeMethod("APVTSUpdate", xml);
+            jsInterop->invokeMethod("APVTSUpdate", xml);
         });
     }
 
+    // JUCE Key press event handler
     bool keyPressed(const juce::KeyPress &key, juce::Component *originatingComponent) override {
         if (key.getTextCharacter() == 'i') {
             // "I" key is pressed
@@ -289,9 +307,6 @@ public:
 
     // Inspector window
     std::unique_ptr<InspectorModalWindow> inspectorModalWindow;
-
-    // Helpers
-    bool isResizing = false;
 
     // Scale multiplier from JUCE
     double JUCE_SCALE = 0;

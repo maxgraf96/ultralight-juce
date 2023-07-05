@@ -1,15 +1,15 @@
 #pragma once
 
-#include <chrono>
-#include <filesystem>
-#include <functional>
-#include <future>
-#include <thread>
-#include <unordered_map>
+#include <chrono>                 // Header for time-related utilities
+#include <filesystem>             // Header for file system operations
+#include <functional>             // Header for function objects
+#include <future>                 // Header for asynchronous operations
+#include <thread>                 // Header for multithreading support
+#include <unordered_map>          // Header for unordered map container
 
 class FileWatcher {
 public:
-    using Callback = std::function<void(const std::string&)>;
+    using Callback = std::function<void(const std::string&)>;   // Type alias for callback function
 
     explicit FileWatcher(const std::string& path, std::chrono::duration<int, std::milli> delay = std::chrono::milliseconds(500))
             : path_(path), delay_(delay), running_(false) {}
@@ -34,19 +34,18 @@ public:
         }
     }
 
-//    void AddCallback(const std::string& filename, Callback callback) {
-//        callbacks_[filename] = callback;
-//    }
-
+    // Add a callback function to be executed when a file is changed
     void AddCallback(const std::string& filename, std::function<void(const std::string&)> callback) {
         callbacks_[filename] = std::move(callback);
     }
 
+    // Remove a callback function for a specific file
     void RemoveCallback(const std::string& filename) {
         callbacks_.erase(filename);
     }
 
 private:
+    // Continuously watches for file changes
     void WatchLoop() {
         std::unordered_map<std::string, std::filesystem::file_time_type> currentFiles;
 
@@ -68,6 +67,7 @@ private:
         }
     }
 
+    // Notifies the registered callbacks about a file change
     void NotifyFileChanged(const std::string& filename) {
         for (const auto& callback : callbacks_) {
             if (filename.find(callback.first) != std::string::npos) {
@@ -76,10 +76,10 @@ private:
         }
     }
 
-    std::string path_;
-    std::chrono::duration<int, std::milli> delay_;
-    std::unordered_map<std::string, Callback> callbacks_;
+    std::string path_;                                      // The path to watch for file changes
+    std::chrono::duration<int, std::milli> delay_;          // The delay between checks for file changes
+    std::unordered_map<std::string, Callback> callbacks_;   // Mapping of filenames to callback functions
 
-    std::thread thread_;
-    std::atomic<bool> running_;
+    std::thread thread_;                                    // The thread running the WatchLoop function
+    std::atomic<bool> running_;                             // Flag indicating whether the watcher is running
 };

@@ -5,10 +5,13 @@ set(CMAKE_CXX_STANDARD 14)
 
 # Add JUCE as a subdirectory
 add_subdirectory(JUCE)
+# Allow modal loops
 add_definitions(-DJUCE_MODAL_LOOPS_PERMITTED=1)
 
+# Add the Ultralight SDK as a subdirectory (by default, put it in the Libs/ultralight-sdk folder)
 add_subdirectory(Libs/ultralight-sdk)
 
+# Get a lock-free queue for the hot-reloading system
 include(FetchContent)
 FetchContent_Declare(
         readerwriterqueue
@@ -26,12 +29,13 @@ set(SOURCES
         Source/InspectorModalWindow.h
         )
 
+# Edit as needed
 juce_add_plugin(${PROJECT_NAME}
         # ICON_BIG ${CMAKE_CURRENT_SOURCE_DIR}/icon.png
         # ICON_SMALL ${CMAKE_CURRENT_SOURCE_DIR}/icon.png
         COMPANY_NAME ${TMPL_CREATOR}
-        IS_SYNTH TRUE
-        NEEDS_MIDI_INPUT TRUE
+        IS_SYNTH FALSE
+        NEEDS_MIDI_INPUT FALSE
         NEEDS_MIDI_OUTPUT FALSE
         IS_MIDI_EFFECT FALSE
         EDITOR_WANTS_KEYBOARD_FOCUS FALSE
@@ -39,17 +43,19 @@ juce_add_plugin(${PROJECT_NAME}
         PLUGIN_MANUFACTURER_CODE ${TMPL_MANUFACTURER_CODE}
         PLUGIN_CODE ${TMPL_PLUGIN_CODE}
         DESCRIPTION "${TMPL_DESCRIPTION}"
-        VST3_CATEGORIES "Instrument Synth Stereo"
+        VST3_CATEGORIES "Audio Effect Stereo"
         AU_MAIN_TYPE "kAudioUnitType_MusicDevice"
         FORMATS VST3 Standalone
         BUNDLE_ID "${TMPL_BUNDLE_ID}"
         HARDENED_RUNTIME_ENABLED TRUE
         PRODUCT_NAME ${TMPL_SHORT_NAME})
 
+# Generate the JUCE header so we can use it in our source files
 juce_generate_juce_header(${PROJECT_NAME})
 
 target_include_directories(${PROJECT_NAME}
         PUBLIC
+        # Add the Ultralight SDK headers to the include path
         Libs/ultralight-sdk/include
         Source
         )
@@ -58,7 +64,7 @@ target_sources(${PROJECT_NAME} PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/GUIMainComponent.cpp
-#        Source/FileWatch.hpp
+        Source/ULHelper.cpp
         )
 
 target_compile_definitions(${PROJECT_NAME}
@@ -103,21 +109,25 @@ target_link_libraries(${PROJECT_NAME}
         juce::juce_gui_extra
         juce::juce_opengl
 
+        # Link the Ultralight libraries to the project
         ${ULTRALIGHT_LIBS}
 
         PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
+        # Link the lock-free queue to the project
         readerwriterqueue
         )
 
+# Use this command if you want to copy the built VST3 file to a specific directory after each build
+# This makes it quicker to test your plugin in your DAW
 # Set the source file and destination directory
 set(source_file "/Users/max/CLionProjects/ultralight-juce/cmake-build-debug/UltralightJUCE_artefacts/Debug/VST3/UltralightJUCE.vst3")
 set(destination_dir "/Library/Audio/Plug-Ins/VST3")
 add_custom_command(
         TARGET UltralightJUCE  # Specify your target name
         POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy "${source_file}" "${destination_dir}/UltralightJUCE.vst3"  # Copy the file
+        COMMAND ${CMAKE_COMMAND} -E copy "${source_file}" "${destination_dir}/UltralightJUCE.vst3"  # Copy the file, change the filename "UltralightJUCE.vst3" as needed
         DEPENDS "${source_file}"   # Specify the dependency on the source file
 )
