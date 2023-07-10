@@ -1,6 +1,9 @@
 ### Project ###
 **/[Bb]uild*/
 
+# CMake build folders
+cmake-build*/
+
 Libs/*
 .idea
 

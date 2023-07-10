@@ -5,7 +5,6 @@
 #ifndef ULTRALIGHTJUCE_GUIMAINCOMPONENT_H
 #define ULTRALIGHTJUCE_GUIMAINCOMPONENT_H
 
-#include <__utility/pair.h>
 #include <memory>
 #include <string>
 
@@ -15,11 +14,11 @@
 #include <AppCore/Platform.h>
 #include <readerwriterqueue.h>
 #include <JavaScriptCore/JSRetainPtr.h>
+#include <JavaScriptCore/JavaScript.h>
 
 #include "FileWatcher.hpp"
 #include "JSInteropBase.h"
 #include "JSInteropExample.h"
-#include "JavaScriptCore/JavaScriptCore.h"
 #include "ULHelper.h"
 #include "Ultralight/RefPtr.h"
 #include "PluginProcessor.h"

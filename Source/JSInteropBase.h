@@ -7,6 +7,7 @@
 #define ULTRALIGHTJUCE_JSINTEROP_H
 
 #include <JavaScriptCore/JSRetainPtr.h>
+#include <JavaScriptCore/JavaScript.h>
 #include <JuceHeader.h>
 #include <functional>
 #include <tuple>
@@ -16,7 +17,6 @@
 
 #include "Ultralight/View.h"
 #include "Ultralight/RefPtr.h"
-#include "JavaScriptCore/JavaScriptCore.h"
 
 /// \brief Base class for all JS interoperation. This class is used to invoke JS methods from C++ and vice versa.
 /// You can extend this class to add your own JS interoperation. An example of how to subclass it is given in
