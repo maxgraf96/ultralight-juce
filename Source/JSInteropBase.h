@@ -32,7 +32,7 @@ public:
 
     /// \brief Core function. This function is called by Ultralight once the DOM has been loaded. This implementation
     /// sets up automatic callbacks for JUCE AudioProcessorValueTreeState (APVTS) changes in JS.
-    void OnDOMReady(ultralight::View* caller,
+    void OnWindowObjectReady(ultralight::View* caller,
                     uint64_t frame_id,
                     bool is_main_frame,
                     const ultralight::String& url) override {
@@ -79,7 +79,7 @@ public:
         // Get the parameter ID
         auto parameterID = JSValueToStringCopy(ctx, arguments[0], nullptr);
         // Allocate a char* of length JSStringGetLength(parameterID)
-        char* parameterIDStr = new char[JSStringGetLength(parameterID)];
+        char* parameterIDStr = new char[JSStringGetLength(parameterID) + 1];
         JSStringGetUTF8CString(parameterID, parameterIDStr, JSStringGetLength(parameterID));
 
         // Get the parameter value
