@@ -54,12 +54,12 @@ target_include_directories(${PROJECT_NAME}
 target_sources(${PROJECT_NAME} PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
-        Source/GUIMainComponent.cpp
+        
         Source/JSInteropBase.h
         Source/JSInteropExample.h
         Source/InspectorModalWindow.h
         Source/FileWatcher.hpp
-        Source/ULHelper.cpp
+        
         )
 
 target_compile_definitions(${PROJECT_NAME}

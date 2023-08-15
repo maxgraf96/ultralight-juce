@@ -30,9 +30,9 @@ public:
     {
     }
 
-    /// \brief Core function. This function is called by Ultralight once the DOM has been loaded. This implementation
+    /// \brief Core function. This function is called by Ultralight once the window has been loaded. This implementation
     /// sets up automatic callbacks for JUCE AudioProcessorValueTreeState (APVTS) changes in JS.
-    void OnDOMReady(ultralight::View* caller,
+    void OnWindowObjectReady(ultralight::View* caller,
                     uint64_t frame_id,
                     bool is_main_frame,
                     const ultralight::String& url) override {
@@ -57,17 +57,24 @@ public:
 
         // Register APVTS parameter update callback
         registerCppFunctionInJS("OnParameterUpdate", OnParameterUpdate);
+    }
 
+    /// \brief This function is called by Ultralight once the DOM has been loaded. 
+    /// This implementation propagates the parameter values loaded from disk to JS
+    void OnDOMReady(ultralight::View* caller,
+					uint64_t frame_id,
+					bool is_main_frame,
+					const ultralight::String& url) override {
         // === JUCE APVTS PARAMS ===
         // Propagate all parameters that were loaded from disk to JS
-        for(auto param : audioParams.processor.getParameters()) {
+        for (auto param : audioParams.processor.getParameters()) {
             // Check if parameter is a float parameter
-            if(auto* floatParam = dynamic_cast<juce::AudioParameterFloat*>(param)) {
+            if (auto* floatParam = dynamic_cast<juce::AudioParameterFloat*>(param)) {
                 parent.parameterChanged(floatParam->getParameterID(), floatParam->get());
             }
             // TODO Add other parameter types
         }
-    }
+	}
 
     /// \brief APVTS parameter propagation to JS. See how it is handled in Resources/script.js.
     static JSValueRef OnParameterUpdate(JSContextRef ctx, JSObjectRef function,
@@ -79,7 +86,7 @@ public:
         // Get the parameter ID
         auto parameterID = JSValueToStringCopy(ctx, arguments[0], nullptr);
         // Allocate a char* of length JSStringGetLength(parameterID)
-        char* parameterIDStr = new char[JSStringGetLength(parameterID)];
+        char* parameterIDStr = new char[JSStringGetLength(parameterID) + 1];
         JSStringGetUTF8CString(parameterID, parameterIDStr, JSStringGetLength(parameterID));
 
         // Get the parameter value

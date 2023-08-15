@@ -23,17 +23,17 @@ public:
 
     }
 
-    // Need to override this method to declare which methods are available to JS
-    void OnDOMReady(ultralight::View* caller, uint64_t frame_id, bool is_main_frame, const ultralight::String& url)
+    // Need to override this method to register callbacks and function that will by used in JS
+    void OnWindowObjectReady(ultralight::View* caller, uint64_t frame_id, bool is_main_frame, const ultralight::String& url)
     override {
         // ========================================================================================================
-        // ESSENTIAL: call OnDOMReady() on the base class (JSInteropBase) first! This will set up the APVTS callbacks
+        // ESSENTIAL: call OnWindowObjectReady() on the base class (JSInteropBase) first! This will set up the APVTS callbacks
         // ========================================================================================================
-        JSInteropBase::OnDOMReady(caller, frame_id, is_main_frame, url);
+        JSInteropBase::OnWindowObjectReady(caller, frame_id, is_main_frame, url);
 
         // ========================================================================================================
-        // JS callbacks in C++. These need to be defined in the OnDOMReady() method, or anywhere else AFTER the DOM
-        // is loaded. If you try to define them before the DOM is ready, they will not be registered in JS.
+        // JS callbacks in C++. These need to be defined in the OnWindowObjectReady() method.
+        // If you try to define them after the DOM is ready, they might not successfully be registered in JS.
         // ========================================================================================================
         // Then, register all your custom functions that are NOT APVTS updates here.
         // E.g., a button click with two arguments:
@@ -48,10 +48,17 @@ public:
             // Do something with the arguments
             // ...
         };
-        // 2) Register callback function in JS - now call OnMyButtonClick(int, String) from anywhere in your
-        // View's JS
+        // 2) Register callback function in JS - now call OnMyButtonClick(int, String) from anywhere in your view's JS
         registerCppCallbackInJS("OnMyButtonClick", buttonClickCallback);
+    }
 
+    // Need to override this method to use JS functions in C++
+    void OnDOMReady(ultralight::View* caller,
+        uint64_t frame_id,
+        bool is_main_frame,
+        const ultralight::String& url) override {
+        // call OnDOMReady() on the base class (JSInteropBase) first to propagate the default parameter values loaded from disk
+        JSInteropBase::OnDOMReady(caller, frame_id, is_main_frame, url);
         // ========================================================================================================
         // Passing data from C++ to JS. These can be called from anywhere in your C++ code, after the DOM is ready.
         // ========================================================================================================
@@ -60,7 +67,7 @@ public:
         // Strings
         invokeMethod("myJSFunction", juce::String("Hello"), juce::String("World"));
         // Arrays
-        std::vector<int> myVector = {1, 2, 3, 4, 5};
+        std::vector<int> myVector = { 1, 2, 3, 4, 5 };
         invokeMethod("myJSFunction", myVector);
         // Mix
         invokeMethod("myJSFunction", 2, juce::String("Hello"), myVector);
